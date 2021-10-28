@@ -1,0 +1,19 @@
+1. Alice generates ephemeral key E and sends to Bob via a secure channel
+2. Alice 
+	i.   generates encryption key A
+	ii.  uses E to create soc E0 with index 0 and topic T at address F0 with payload pubA
+3. Alice begins to watch for existence of soc E1 with index 1 and topic T at address F1
+4. Bob 
+	i.	 generates encryption key A
+	ii.  recieves ephemeral key E from Alice
+	iii. uses E to reconstruct F0 and retrieves pubA
+	iv.  uses E to create soc with index 1 and topic T at address F1 with payload pubA
+	v.   creates a diffie-hellman shared secret S with pubA and privB
+5. Alice 
+	i.   notes the existence of F1 and retrieves pubB
+	ii.  creates a diffie-hellman shared secret S with pubB and privA
+6. Bob and Alice
+	i.   create socs B0 and A0 respectively with topic S(T), index S(0) and payload S(P)
+	ii.  watch for existence of A0 and B0 respectively with topic S(T) and index S(0) and use S to determine P
+	iii. if index S(n) exists, look for next soc at index S(n+1)
+7. (optional) Bob and Alice confirm channel by secure channel/IRL
