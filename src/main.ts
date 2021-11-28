@@ -102,11 +102,3 @@ export const foo = async (): Promise<boolean> => {
   console.log("done");
   return true;
 };
-
-// type SyncSigner = (digest: Data) => Signature | string;
-// type AsyncSigner = (digest: Data) => Promise<Signature | string>;
-
-// export type Signer = {
-//   sign: SyncSigner | AsyncSigner;
-//   address: EthAddress;
-// };

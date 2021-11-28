@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@ethersphere/bee-js": "^2.1.0",
+    "elliptic": "^6.5.4",
     "ethers": "^5.5.1",
     "node-webcrypto-ossl": "^2.1.3",
     "web3": "^1.6.0"
