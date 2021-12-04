@@ -1,87 +1,67 @@
-import {
-	randomBytes,
-	createECDH,
-	createCipheriv,
-	createDecipheriv,
-} from "crypto";
-import { ec } from "elliptic";
+import { KeyPair, PublicKey, PrivateKey, Secret, IV } from "./types";
+
+import { createECDH, createCipheriv, createDecipheriv } from "crypto";
 
 class Crypto {
-	generatePrivateKey(): <bytes> {
-		return randomBytes(32);
+	generateKeyPair(): KeyPair {
+		const curve = createECDH("secp256k1");
+		curve.generateKeys();
+		return {
+			privateKey: curve.getPrivateKey(),
+			publicKey: curve.getPublicKey(),
+		};
 	}
 
-	generateRandomIV() {
-		return randomBytes(16);
-	}
-
-	privateToPublicKey(privateKey) {
-		const secp256k1 = new ec("secp256k1");
-		const buffer = Buffer.from(privateKey.slice(2), "hex");
-		const ecKey = secp256k1.keyFromPrivate(buffer);
-		const publicKey = "0x" + ecKey.getPublic(false, "hex").slice(2);
-		return publicKey;
-	}
-
-	calculateSharedSecret(privateKey, recipientPublicKey) {
-		let pk = privateKey.substring(2, 66);
-		let pub = recipientPublicKey.substring(2, 130);
-		if (pk.length !== 64) {
-			throw new Error(
-				"private key must be a 32 byte hex string " + privateKey
-			);
-		}
-		if (pub.length !== 128) {
-			throw new Error(
-				"public key must be a 64 byte hex string " + recipientPublicKey
-			);
-		}
+	calculateSharedSecret(
+		privateKey: PrivateKey,
+		publicKey: PublicKey
+	): Secret {
 		let sender = createECDH("secp256k1");
-		sender.setPrivateKey(pk, "hex");
-		return sender.computeSecret("04" + pub, "hex").toString("hex");
+		sender.setPrivateKey(privateKey);
+
+		return sender.computeSecret(publicKey);
 	}
 
-	encryptString(string, password, iv) {
-		return this.encryptBuffer(
-			Buffer.from(string, "utf8"),
-			password,
-			iv
-		).then((encryptedBuffer) => {
-			return encryptedBuffer.toString("hex");
-		});
-	}
+	// async encryptString(plainText: string, secret: Secret, iv: Nonce): string {
+	// 	return this.encryptBuffer(
+	// 		Buffer.from(string, "utf8"),
+	// 		password,
+	// 		iv
+	// 	).then((encryptedBuffer) => {
+	// 		return encryptedBuffer.toString("hex");
+	// 	});
+	// }
 
-	decryptString(string, password, iv) {
-		let decryptedBuffer = this.decryptBuffer(
-			Buffer.from(string, "hex"),
-			password,
-			iv
-		);
-		return new TextDecoder().decode(decryptedBuffer);
-	}
-
-	encryptBuffer(buffer, password, iv) {
-		return new Promise((resolve, reject) => {
-			let cipher = createCipheriv(
-				"aes-256-ctr",
-				Buffer.from(password.substring(2), "hex"),
-				iv
-			);
+	async encryptBuffer(
+		plainTextBuffer: Buffer,
+		secret: Secret,
+		ivBuffer: IV
+	): Promise<Buffer> {
+		return new Promise((resolve) => {
+			let cipher = createCipheriv("aes-256-ctr", secret, ivBuffer);
 			let crypted = Buffer.concat([
-				cipher.update(buffer),
+				cipher.update(plainTextBuffer),
 				cipher.final(),
 			]);
 			resolve(crypted);
 		});
 	}
 
-	decryptBuffer(buffer, password, iv) {
-		var decipher = createDecipheriv(
-			"aes-256-ctr",
-			Buffer.from(password.substring(2), "hex"),
-			iv
-		);
-		var dec = Buffer.concat([decipher.update(buffer), decipher.final()]);
+	// decryptString(string, password, iv) {
+	// 	let decryptedBuffer = this.decryptBuffer(
+	// 		Buffer.from(string, "hex"),
+	// 		password,
+	// 		iv
+	// 	);
+	// 	return new TextDecoder().decode(decryptedBuffer);
+	// }
+
+	decryptBuffer(cypherTextBuffer: Buffer, secret: Secret, iv: IV) {
+		var decipher = createDecipheriv("aes-256-ctr", secret, iv);
+		var dec = Buffer.concat([
+			decipher.update(cypherTextBuffer),
+			decipher.final(),
+		]);
 		return dec;
 	}
 }

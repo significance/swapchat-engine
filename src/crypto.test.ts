@@ -1,25 +1,55 @@
+import { IV, Secret } from "./types";
+
 import crypto from "./crypto";
 
-console.log(crypto);
+let sharedSecret: Secret, ivBuffer: IV, cypherTextBuffer: Buffer;
+let plainText = "hello w0rld";
 
-// test("generates key pairs", () => {
-//   let a = crypto.newKeyPair();
-//   let b = crypto.newKeyPair();
-// });
+test("generates random private key", () => {
+  let keyPair = crypto.generateKeyPair();
+  expect(keyPair.privateKey.length).toBe(32);
+});
 
-// test("generates shared secret", () => {
-//   let sharedSecretAB = crypto.calculateSharedSecret(a.privateKey, b.publicKey);
-//   let sharedSecretBA = crypto.calculateSharedSecret(a.privateKey, b.publicKey);
-//   sharedSecretAB == sharedSecretBA;
-//   s;
-// });
+test("calculates shared secret", () => {
+  let keyPair1 = crypto.generateKeyPair();
+  let keyPair2 = crypto.generateKeyPair();
 
-// test("encrypts message", () => {
-//   let plaintext = "i'm in";
-//   let cipherText = crypto.encrypt(secret, plaintext);
-// });
+  let sharedSecret1 = crypto.calculateSharedSecret(
+    keyPair1.privateKey,
+    keyPair2.publicKey
+  );
+  let sharedSecret2 = crypto.calculateSharedSecret(
+    keyPair2.privateKey,
+    keyPair1.publicKey
+  );
 
-// test("decrypts message", () => {
-//   let cipherText = "";
-//   let plaintext = crypto.decrypt(secret, cipherText);
-// });
+  expect(sharedSecret1).toStrictEqual(sharedSecret2);
+
+  sharedSecret = sharedSecret1;
+});
+
+test("encrypts buffer with secret", async () => {
+  ivBuffer = Buffer.alloc(16);
+  ivBuffer.writeUInt16BE(1, 0);
+
+  let plainTextBuffer = Buffer.from(plainText, "utf8");
+
+  cypherTextBuffer = await crypto.encryptBuffer(
+    plainTextBuffer,
+    sharedSecret,
+    ivBuffer
+  );
+
+  //...
+});
+
+test("decrypts buffer with secret", async () => {
+  let decryptedPlainTextBuffer = await crypto.decryptBuffer(
+    cypherTextBuffer,
+    sharedSecret,
+    ivBuffer
+  );
+  let decryptedPlainText = decryptedPlainTextBuffer.toString();
+
+  expect(decryptedPlainText).toBe(plainText);
+});
