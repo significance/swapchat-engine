@@ -6,7 +6,7 @@ import {
   uploadChunk,
   updateFeed,
   downloadFeed,
-  // uploadSOC,
+  uploadSOC,
   downloadSOC,
 } from "./main";
 
@@ -15,6 +15,14 @@ test("uploadChunk", async () => {
   expect(response.reference).toBe(
     "ca6357a08e317d15ec560fef34e4c45f8f19f01c372aa70f1da72bfa7f1a4338"
   );
+});
+
+test("uploadSOC", async () => {
+  let response = await uploadSOC();
+  console.log(response);
+  // expect(response.reference).toBe(
+  //   "ca6357a08e317d15ec560fef34e4c45f8f19f01c372aa70f1da72bfa7f1a4338"
+  // );
 });
 
 // test("uploadSOC", async () => {
@@ -31,7 +39,7 @@ test("updateFeed", async () => {
   console.log(response2);
 });
 
-test("updateSOC", async () => {
+test("downloadSOC", async () => {
   // let response = await uploadSOC();
   // console.log(response);
 

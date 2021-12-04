@@ -1,15 +1,32 @@
-test("uploads SOC to index 0", () => {
-  //
+import Swarm from "./swarm";
+
+import Crypto from "./crypto";
+
+const apiURL = "http://localhost:1633";
+const debugURL = "http://localhost:1635";
+
+let senderAddress: any, data: any;
+
+let index = Math.floor(Math.random() * 10000);
+
+test("uploads SOC to random index", async () => {
+  let keyPair = Crypto.generateKeyPair();
+
+  senderAddress = keyPair.address;
+
+  const swarm = new Swarm(apiURL, debugURL);
+  await swarm.buyStamp();
+
+  data = new Uint8Array([1, 2, 3]);
+
+  await swarm.writeSOC(keyPair, index, data);
 });
 
-test("uploads SOC to index 1", () => {
-  //
-});
+test("downloads SOC from random index", async () => {
+  const swarm = new Swarm(apiURL, debugURL);
 
-test("downloads SOC from index 0", () => {
-  //
-});
+  let response = await swarm.readSOC(senderAddress, index);
 
-test("downloads SOC from index 1", () => {
-  //
+  console.log(response.data);
+  expect(response.payload()).toStrictEqual(data);
 });

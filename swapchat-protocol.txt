@@ -5,7 +5,7 @@
 3. Alice begins to watch for existence of soc E1 with index 1 and topic T at address F1
 4. Bob 
 	i.	 generates encryption key A
-	ii.  recieves ephemeral key E from Alice
+	ii.  receives ephemeral key E from Alice
 	iii. uses E to reconstruct F0 and retrieves pubA
 	iv.  uses E to create soc with index 1 and topic T at address F1 with payload pubA
 	v.   creates a diffie-hellman shared secret S with pubA and privB
