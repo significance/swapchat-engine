@@ -2,41 +2,30 @@
 
 let token;
 
-test("alice session initialise", async () => {
-  let session = await initialise(
-    beeGateway,
-    privateKey,
-    connectedCallback,
-    receivedCallback
-  );
+test("alan session initialise", async () => {
+  const session = await initialise(beeGateway);
 
-  token = session.token;
+  token = session.getToken();
 
   session.receive(() => {
     session.received.count == 1;
-    session.received[0].plainText = "hi bob";
+    session.received[0].plainText = "hi alan";
   });
 
   await session.connected();
 
-  session.send("hi bob");
+  session.send("hi becky");
 });
 
-test("barbie session initialise", async () => {
-  let session = await respond(
-    beeGateway,
-    token,
-    privateKey,
-    connectedCallback,
-    receivedCallback
-  );
+test("becky session initialise", async () => {
+  let session = await respond(beeGateway, token);
 
   session.received(() => {
     session.received.count == 1;
-    session.received[0].plainText = "hi bob";
+    session.received[0].plainText = "hi becky";
   });
 
   await session.connected();
 
-  session.send("hi alice");
+  session.send("hi alan");
 });
