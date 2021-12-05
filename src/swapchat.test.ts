@@ -5,11 +5,13 @@ const apiURL = "http://localhost:1633";
 const debugURL = "http://localhost:1635";
 
 test("session is initialised", async () => {
-  const sessionA = await SwapChat.initiate(apiURL, debugURL);
+  const swapChatA = new SwapChat();
+  const sessionA = await swapChatA.initiate(apiURL, debugURL);
 
   let token = sessionA.getToken();
 
-  const sessionB = await SwapChat.respond(apiURL, debugURL, token);
+  const swapChatB = new SwapChat();
+  const sessionB = await swapChatB.respond(apiURL, debugURL, token);
 
   expect(sessionA.SharedKeyPair).toStrictEqual(sessionB.SharedKeyPair);
 
@@ -24,12 +26,17 @@ test("session is initialised", async () => {
 });
 
 test("handshake chunk is sent and received", async () => {
-  const sessionA = await SwapChat.initiate(apiURL, debugURL);
+  const swapChatA = new SwapChat();
+
+  const sessionA = await swapChatA.initiate(apiURL, debugURL);
   let token = sessionA.getToken();
 
-  const sessionB = await SwapChat.respond(apiURL, debugURL, token);
+  const swapChatB = new SwapChat();
+  const sessionB = await swapChatB.respond(apiURL, debugURL, token);
 
   await sessionA.waitForRespondentHandshakeChunk();
+
+  //sends initator chunk
 
   await sessionB.waitForInitiatorHandshakeChunk();
 

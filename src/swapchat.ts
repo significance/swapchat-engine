@@ -57,28 +57,41 @@ class SwapChat {
 		await this.Swarm.writeSOC(this.SharedKeyPair, 0, payload);
 	}
 
-	async waitForRespondentHandshakeChunk() {
-		let response = await this.Swarm.readSOC(this.SharedKeyPair.address, 0);
-		if (response.length == 65) {
-		} else {
-			console.log(response.length);
-			await sleep(1000);
-			this.waitForRespondentHandshakeChunk();
+	async waitForRespondentHandshakeChunk(): Promise<any> {
+		let response;
+		try {
+			response = await this.Swarm.readSOC(this.SharedKeyPair.address, 0);
+		} catch (e) {
+			console.log("could not find respondent handshake chunk");
 		}
+
+		//todo, timeout after a while
+		if (response === undefined) {
+			console.log("trying to find respondent handshake chunk");
+			await sleep(1000);
+			return await this.waitForRespondentHandshakeChunk();
+		}
+
+		return;
 	}
 
-	async waitForInitiatorHandshakeChunk() {
+	async waitForInitiatorHandshakeChunk(): Promise<any> {
 		let response;
 		try {
 			response = await this.Swarm.readSOC(this.SharedKeyPair.address, 1);
-			return true;
 		} catch (e) {
-			console.log(response);
-			if (response.status === 404) {
-				await sleep(1000);
-				return await this.waitForRespondentHandshakeChunk();
-			}
+			console.log("could not find initiator handshake chunk");
 		}
+
+		//todo, timeout after a while
+
+		if (response === undefined) {
+			console.log("trying to find initiator handshake chunk");
+			await sleep(1000);
+			return await this.waitForInitiatorHandshakeChunk();
+		}
+
+		return;
 	}
 
 	parseRespondentHandshakePayload(respondentPublicKey: PublicKey) {
@@ -123,4 +136,4 @@ class SwapChat {
 	}
 }
 
-export default new SwapChat();
+export default SwapChat;
