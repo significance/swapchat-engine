@@ -8,6 +8,8 @@ let plainText = "hello w0rld";
 test("generates random private key", () => {
   let keyPair = crypto.generateKeyPair();
   expect(keyPair.privateKey.length).toBe(32);
+  expect(keyPair.publicKey.length).toBe(65);
+  expect(keyPair.address.length).toBe(20);
 });
 
 test("calculates shared secret", () => {
