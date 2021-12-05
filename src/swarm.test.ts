@@ -6,7 +6,9 @@ const gateway = "http://localhost:1633";
 
 let senderAddress: any, data: any;
 
-test("uploads SOC to index 0", async () => {
+let index = Math.floor(Math.random() * 10000);
+
+test("uploads SOC to random index", async () => {
   let keyPair = Crypto.generateKeyPair();
 
   senderAddress = keyPair.address;
@@ -16,20 +18,12 @@ test("uploads SOC to index 0", async () => {
 
   data = new Uint8Array([1, 2, 3]);
 
-  await swarm.writeSOC(0, data);
+  await swarm.writeSOC(index, data);
 });
 
-test("uploads SOC to index 1", () => {
-  //
-});
-
-test("downloads SOC from index 0", async () => {
+test("downloads SOC from random index", async () => {
   let swarm = new Swarm(gateway);
-  let response = await swarm.readSOC(senderAddress, 0);
 
+  let response = await swarm.readSOC(senderAddress, index);
   expect(response).toStrictEqual(data);
-});
-
-test("downloads SOC from index 1", () => {
-  //
 });
