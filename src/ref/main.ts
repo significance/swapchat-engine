@@ -1,11 +1,12 @@
-import { Bee, Utils } from "@ethersphere/bee-js";
+import { Bee, BeeDebug, Utils } from "@ethersphere/bee-js";
 
 // import { ethers } from "ethers";
 
 export async function uploadChunk() {
   const bee = new Bee("http://localhost:1633");
+  const beeDebug = new BeeDebug("http://localhost:1633");
 
-  const postageBatchId = await bee.createPostageBatch("100", 17);
+  const postageBatchId = await beeDebug.createPostageBatch("100", 17);
   const data = new Uint8Array([1, 2, 3]);
 
   const result = await bee.uploadData(postageBatchId, data);
@@ -15,7 +16,8 @@ export async function uploadChunk() {
 
 export async function uploadSOC() {
   const bee = new Bee("http://localhost:1633");
-
+  const beeDebug = new BeeDebug("http://localhost:1633");
+  //
   const signer =
     "0x634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd";
 
@@ -28,12 +30,12 @@ export async function uploadSOC() {
   type Identifier = Bytes<32>;
 
   const topic: Identifier = Utils.hexToBytes(
-    "0000000000000000000000000000000000000000000000000000000000000003"
+    "0000000000000000000000000000000000000000000000000000000000000006"
   );
 
   const data = new Uint8Array([1, 2, 3]);
 
-  const postageBatchId = await bee.createPostageBatch("100", 17);
+  const postageBatchId = await beeDebug.createPostageBatch("100", 17);
 
   const response = await socWriter.upload(postageBatchId, topic, data);
 
@@ -42,6 +44,7 @@ export async function uploadSOC() {
 
 export async function downloadSOC() {
   const bee = new Bee("http://localhost:1633");
+  // const beeDebug = new BeeDebug("http://localhost:1633");
 
   const signer =
     "0x634fb5a872396d9693e5c9f9d7233cfa93f395c093371017ff44aa9ae6564cdd";
@@ -67,7 +70,8 @@ export async function downloadSOC() {
 
 export async function updateFeed() {
   const bee = new Bee("http://localhost:1633");
-  const postageBatchId = await bee.createPostageBatch("100", 17);
+  const beeDebug = new BeeDebug("http://localhost:1633");
+  const postageBatchId = await beeDebug.createPostageBatch("100", 17);
   const data = new Uint8Array([1, 2, 3]);
   const reference = await bee.uploadData(postageBatchId, data);
   const topic =
@@ -81,6 +85,7 @@ export async function updateFeed() {
 
 export async function downloadFeed() {
   const bee = new Bee("http://localhost:1633");
+  // const beeDebug = new BeeDebug("http://localhost:1633");
   const topic =
     "0000000000000000000000000000000000000000000000000000000000000000";
   const owner = "0x8d3766440f0d7b949a5e32995d09619a7f86e632";
