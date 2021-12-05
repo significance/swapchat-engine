@@ -2,7 +2,8 @@ import Swarm from "./swarm";
 
 import Crypto from "./crypto";
 
-const gateway = "http://localhost:1633";
+const apiURL = "http://localhost:1633";
+const debugURL = "http://localhost:1635";
 
 let senderAddress: any, data: any;
 
@@ -13,7 +14,7 @@ test("uploads SOC to random index", async () => {
 
   senderAddress = keyPair.address;
 
-  const swarm = new Swarm(gateway, keyPair);
+  const swarm = new Swarm(apiURL, debugURL, keyPair);
   await swarm.buyStamp();
 
   data = new Uint8Array([1, 2, 3]);
@@ -22,7 +23,7 @@ test("uploads SOC to random index", async () => {
 });
 
 test("downloads SOC from random index", async () => {
-  let swarm = new Swarm(gateway);
+  const swarm = new Swarm(apiURL, debugURL);
 
   let response = await swarm.readSOC(senderAddress, index);
   expect(response).toStrictEqual(data);

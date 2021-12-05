@@ -9,11 +9,10 @@ class Swarm {
 	public BeeDebug;
 	public KeyPair: KeyPair | undefined;
 	public BatchID: any;
-	public SocWriter: any;
 
-	constructor(gateway: string, keyPair?: KeyPair) {
-		this.Bee = new Bee(gateway);
-		this.BeeDebug = new BeeDebug(gateway);
+	constructor(apiURL: string, debugURL: string, keyPair?: KeyPair) {
+		this.Bee = new Bee(apiURL);
+		this.BeeDebug = new BeeDebug(debugURL);
 		if (keyPair) {
 			this.KeyPair = keyPair;
 		}
