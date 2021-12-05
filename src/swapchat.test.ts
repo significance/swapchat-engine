@@ -1,4 +1,5 @@
 import SwapChat from "./swapchat";
+import { PublicKey } from "./types";
 
 const apiURL = "http://localhost:1633";
 const debugURL = "http://localhost:1635";
@@ -10,18 +11,29 @@ test("session is initialised", async () => {
 
   const sessionB = await SwapChat.respond(apiURL, debugURL, token);
 
-  sessionB.parseToken(token);
-
   expect(sessionA.SharedKeyPair).toStrictEqual(sessionB.SharedKeyPair);
 
-  let responsePayload = sessionB.getResponsePayload();
+  let responsePayload = sessionB.getRespondentHandshakePayload() as PublicKey;
 
-  sessionA.parseResponsePayload(responsePayload);
+  sessionA.parseRespondentHandshakePayload(responsePayload);
 
   expect(sessionA.SharedSecret).toStrictEqual(sessionB.SharedSecret);
 
   expect(sessionA.handShakeCompleted()).toStrictEqual(true);
   expect(sessionB.handShakeCompleted()).toStrictEqual(true);
+});
+
+test("handshake chunk is sent and received", async () => {
+  const sessionA = await SwapChat.initiate(apiURL, debugURL);
+  let token = sessionA.getToken();
+
+  const sessionB = await SwapChat.respond(apiURL, debugURL, token);
+
+  await sessionA.waitForRespondentHandshakeChunk();
+
+  await sessionB.waitForInitiatorHandshakeChunk();
+
+  console.log(sessionB);
 });
 
 // let token;

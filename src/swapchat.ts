@@ -5,6 +5,9 @@ import { Utils } from "@ethersphere/bee-js";
 
 import { KeyPair, PublicKey, PrivateKey } from "./types";
 
+const sleep = (delay: any) =>
+	new Promise((resolve) => setTimeout(resolve, delay));
+
 class SwapChat {
 	public Swarm: any;
 	public SharedKeyPair: any;
@@ -13,19 +16,27 @@ class SwapChat {
 	public IsInitiator: boolean = false;
 	public IsRespondent: boolean = false;
 
-	initiate(apiURL: string, debugURL: string) {
+	async initiate(apiURL: string, debugURL: string) {
 		this.IsInitiator = true;
 		this.SharedKeyPair = crypto.generateKeyPair();
 		this.OwnKeyPair = crypto.generateKeyPair();
+
 		this.Swarm = new Swarm(apiURL, debugURL);
+		await this.Swarm.buyStamp();
+
 		return this;
 	}
 
-	respond(apiURL: string, debugURL: string, token: string) {
+	async respond(apiURL: string, debugURL: string, token: string) {
 		this.IsRespondent = true;
 		this.OwnKeyPair = crypto.generateKeyPair();
-		this.Swarm = new Swarm(apiURL, debugURL);
 		this.parseToken(token);
+
+		this.Swarm = new Swarm(apiURL, debugURL);
+		await this.Swarm.buyStamp();
+
+		await this.sendRespondentHandshakeChunk();
+
 		return this;
 	}
 
@@ -36,14 +47,44 @@ class SwapChat {
 		);
 	}
 
-	parseResponsePayload(responsePayload: string) {
-		let respondentPublicKey = responsePayload;
-		let respondentPublicKeyBytes = Utils.hexToBytes(
-			respondentPublicKey
-		) as PublicKey;
+	getRespondentHandshakePayload(): any {
+		// todo encrypt this using something from token?
+		return this.OwnKeyPair.publicKey;
+	}
+
+	async sendRespondentHandshakeChunk() {
+		let payload = this.getRespondentHandshakePayload();
+		await this.Swarm.writeSOC(this.SharedKeyPair, 0, payload);
+	}
+
+	async waitForRespondentHandshakeChunk() {
+		let response = await this.Swarm.readSOC(this.SharedKeyPair.address, 0);
+		if (response.length == 65) {
+		} else {
+			console.log(response.length);
+			await sleep(1000);
+			this.waitForRespondentHandshakeChunk();
+		}
+	}
+
+	async waitForInitiatorHandshakeChunk() {
+		let response;
+		try {
+			response = await this.Swarm.readSOC(this.SharedKeyPair.address, 1);
+			return true;
+		} catch (e) {
+			console.log(response);
+			if (response.status === 404) {
+				await sleep(1000);
+				return await this.waitForRespondentHandshakeChunk();
+			}
+		}
+	}
+
+	parseRespondentHandshakePayload(respondentPublicKey: PublicKey) {
 		this.SharedSecret = crypto.calculateSharedSecret(
 			this.OwnKeyPair.privateKey,
-			respondentPublicKeyBytes
+			respondentPublicKey
 		);
 	}
 
@@ -67,11 +108,6 @@ class SwapChat {
 			this.OwnKeyPair.privateKey,
 			respondentPublicKeyBytes
 		);
-	}
-
-	getResponsePayload(): string {
-		// todo encrypt this using something from token?
-		return this.OwnKeyPair.publicKey.toString("hex");
 	}
 
 	handShakeCompleted(): boolean {
