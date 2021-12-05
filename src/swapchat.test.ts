@@ -36,8 +36,6 @@ test("handshake chunk is sent and received", async () => {
 
   await sessionA.waitForRespondentHandshakeChunk();
 
-  //sends initator chunk
-
   await sessionB.waitForInitiatorHandshakeChunk();
 
   console.log(sessionB);

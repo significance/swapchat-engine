@@ -23,7 +23,6 @@ class SwapChat {
 
 		this.Swarm = new Swarm(apiURL, debugURL);
 		await this.Swarm.buyStamp();
-
 		return this;
 	}
 
@@ -72,7 +71,19 @@ class SwapChat {
 			return await this.waitForRespondentHandshakeChunk();
 		}
 
+		await this.sendInitiatorHandshakeChunk();
+
 		return;
+	}
+
+	getInitiatorHandshakePayload(): any {
+		// todo encrypt this using something from token?
+		return new Uint8Array([1]);
+	}
+
+	async sendInitiatorHandshakeChunk() {
+		let payload = this.getInitiatorHandshakePayload();
+		await this.Swarm.writeSOC(this.SharedKeyPair, 1, payload);
 	}
 
 	async waitForInitiatorHandshakeChunk(): Promise<any> {
@@ -84,7 +95,6 @@ class SwapChat {
 		}
 
 		//todo, timeout after a while
-
 		if (response === undefined) {
 			console.log("trying to find initiator handshake chunk");
 			await sleep(1000);
