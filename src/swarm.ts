@@ -54,8 +54,7 @@ class Swarm {
 		const topicBytes: Identifier = Utils.hexToBytes(topic.toString("hex"));
 
 		let response = await socReader.download(topicBytes);
-		console.log(response);
-		return response.payload();
+		return response;
 	}
 }
 
