@@ -19,7 +19,7 @@ test("uploads SOC to random index", async () => {
 
   data = new Uint8Array([1, 2, 3]);
 
-  await swarm.writeSOC(index, data);
+  await swarm.writeSOC(keyPair, index, data);
 });
 
 test("downloads SOC from random index", async () => {

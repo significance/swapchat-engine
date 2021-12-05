@@ -26,15 +26,15 @@ class Swarm {
 		this.BatchID = postageBatchId;
 	}
 
-	async writeSOC(index: number, data: any) {
+	async writeSOC(keyPair: KeyPair, index: number, data: any) {
 		const topic = Buffer.alloc(32);
 		topic.writeUInt16LE(index, 0);
 
-		if (this.KeyPair === undefined) {
+		if (keyPair === undefined) {
 			throw new Error("can only write if keypair was defined");
 		}
 
-		let socWriter = this.Bee.makeSOCWriter(this.KeyPair.privateKey);
+		let socWriter = this.Bee.makeSOCWriter(keyPair.privateKey);
 
 		//what is the desired way to deal with this? :D
 		type Identifier = Bytes<32>;
@@ -54,7 +54,7 @@ class Swarm {
 		const topicBytes: Identifier = Utils.hexToBytes(topic.toString("hex"));
 
 		let response = await socReader.download(topicBytes);
-
+		console.log(response);
 		return response.payload();
 	}
 }
