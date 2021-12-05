@@ -5,6 +5,21 @@ import { keccak256Hash } from "./utils";
 import { createECDH, createCipheriv, createDecipheriv } from "crypto";
 
 class Crypto {
+	importKeyPair(privateKey: PrivateKey): KeyPair {
+		const curve = createECDH("secp256k1");
+
+		curve.setPrivateKey(privateKey);
+
+		let publicKey = curve.getPublicKey();
+		let address = this.publicKeyToAddress(publicKey);
+
+		return {
+			address: Buffer.from(address),
+			privateKey: curve.getPrivateKey(),
+			publicKey: publicKey,
+		};
+	}
+
 	generateKeyPair(): KeyPair {
 		const curve = createECDH("secp256k1");
 
