@@ -38,7 +38,10 @@ test("handshake chunk is sent and received", async () => {
 
   await sessionB.waitForInitiatorHandshakeChunk();
 
-  console.log(sessionB);
+  expect(sessionA.SharedSecret).toStrictEqual(sessionB.SharedSecret);
+
+  expect(sessionA.handShakeCompleted()).toStrictEqual(true);
+  expect(sessionB.handShakeCompleted()).toStrictEqual(true);
 });
 
 // let token;

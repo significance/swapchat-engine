@@ -73,6 +73,8 @@ class SwapChat {
 
 		await this.sendInitiatorHandshakeChunk();
 
+		this.parseRespondentHandshakePayload(response.payload());
+
 		return;
 	}
 
