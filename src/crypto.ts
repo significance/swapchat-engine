@@ -5,6 +5,12 @@ import { keccak256Hash } from "./utils";
 import { createECDH, createCipheriv, createDecipheriv } from "crypto";
 
 class Crypto {
+	ivFromUint(int: number) {
+		let ivBuffer = Buffer.alloc(16);
+		ivBuffer.writeUInt16BE(int, 0);
+		return ivBuffer;
+	}
+
 	importKeyPair(privateKey: PrivateKey): KeyPair {
 		const curve = createECDH("secp256k1");
 
@@ -83,8 +89,8 @@ class Crypto {
 	// 	return new TextDecoder().decode(decryptedBuffer);
 	// }
 
-	decryptBuffer(cypherTextBuffer: Buffer, secret: Secret, iv: IV) {
-		var decipher = createDecipheriv("aes-256-ctr", secret, iv);
+	decryptBuffer(cypherTextBuffer: Buffer, secret: Secret, ivBuffer: IV) {
+		var decipher = createDecipheriv("aes-256-ctr", secret, ivBuffer);
 		var dec = Buffer.concat([
 			decipher.update(cypherTextBuffer),
 			decipher.final(),

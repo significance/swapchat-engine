@@ -45,8 +45,7 @@ test("calculates shared secret", () => {
 });
 
 test("encrypts buffer with secret", async () => {
-  ivBuffer = Buffer.alloc(16);
-  ivBuffer.writeUInt16BE(1, 0);
+  ivBuffer = crypto.ivFromUint(1);
 
   let plainTextBuffer = Buffer.from(plainText, "utf8");
 
