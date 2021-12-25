@@ -4,18 +4,17 @@ import { Bytes, KeyPair } from "./types";
 
 // import { makeBytes } from "./utils";
 
+const SOC_READ_TIMEOUT = 1000;
+
 class Swarm {
 	public Bee;
 	public BeeDebug;
 	public KeyPair: KeyPair | undefined;
 	public BatchID: any;
 
-	constructor(apiURL: string, debugURL: string, keyPair?: KeyPair) {
+	constructor(apiURL: string, debugURL: string) {
 		this.Bee = new Bee(apiURL);
 		this.BeeDebug = new BeeDebug(debugURL);
-		if (keyPair) {
-			this.KeyPair = keyPair;
-		}
 	}
 
 	async buyStamp() {
@@ -29,6 +28,8 @@ class Swarm {
 	async writeSOC(keyPair: KeyPair, index: number, data: any) {
 		const topic = Buffer.alloc(32);
 		topic.writeUInt16LE(index, 0);
+
+		console.log("topic in", topic);
 
 		if (keyPair === undefined) {
 			throw new Error("can only write if keypair was defined");
@@ -44,7 +45,9 @@ class Swarm {
 	}
 
 	async readSOC(address: any, index: number) {
-		let socReader = this.Bee.makeSOCReader(address);
+		let socReader = this.Bee.makeSOCReader(address, {
+			timeout: SOC_READ_TIMEOUT,
+		});
 
 		const topic = Buffer.alloc(32);
 		topic.writeUInt16LE(index, 0);
@@ -54,6 +57,7 @@ class Swarm {
 		const topicBytes: Identifier = Utils.hexToBytes(topic.toString("hex"));
 
 		let response = await socReader.download(topicBytes);
+
 		return response;
 	}
 }

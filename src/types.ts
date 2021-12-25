@@ -25,3 +25,15 @@ export interface KeyPair {
 }
 
 // swarm
+
+export type SwarmType<T> = new (...args: any[]) => T;
+
+export interface Message {
+	index: number;
+	content: string;
+	timestamp: date;
+}
+
+export interface Conversation {
+	messages: Message[];
+}

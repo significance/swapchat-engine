@@ -20,7 +20,7 @@ class Crypto {
 		let address = this.publicKeyToAddress(publicKey);
 
 		return {
-			address: Buffer.from(address),
+			address: address,
 			privateKey: curve.getPrivateKey(),
 			publicKey: publicKey,
 		};
@@ -42,7 +42,7 @@ class Crypto {
 	}
 
 	publicKeyToAddress(pubKey: PublicKey) {
-		return keccak256Hash(pubKey.slice(1)).slice(12);
+		return Buffer.from(keccak256Hash(pubKey.slice(1)).slice(12));
 	}
 
 	calculateSharedSecret(

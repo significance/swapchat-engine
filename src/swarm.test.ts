@@ -14,7 +14,7 @@ test("uploads SOC to random index", async () => {
 
   senderAddress = keyPair.address;
 
-  const swarm = new Swarm(apiURL, debugURL, keyPair);
+  const swarm = new Swarm(apiURL, debugURL);
   await swarm.buyStamp();
 
   data = new Uint8Array([1, 2, 3]);
@@ -26,5 +26,7 @@ test("downloads SOC from random index", async () => {
   const swarm = new Swarm(apiURL, debugURL);
 
   let response = await swarm.readSOC(senderAddress, index);
+
+  console.log(response.data);
   expect(response.payload()).toStrictEqual(data);
 });
