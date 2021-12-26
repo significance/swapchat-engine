@@ -27,6 +27,5 @@ test("downloads SOC from random index", async () => {
 
   let response = await swarm.readSOC(senderAddress, index);
 
-  console.log(response.data);
   expect(response.payload()).toStrictEqual(data);
 });

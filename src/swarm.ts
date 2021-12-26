@@ -29,8 +29,6 @@ class Swarm {
 		const topic = Buffer.alloc(32);
 		topic.writeUInt16LE(index, 0);
 
-		console.log("topic in", topic);
-
 		if (keyPair === undefined) {
 			throw new Error("can only write if keypair was defined");
 		}
