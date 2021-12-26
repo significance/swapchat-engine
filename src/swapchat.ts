@@ -34,7 +34,7 @@ class SwapChat {
 	public OtherPartyCurrentIndex: number = 0;
 	public OwnConversation: Conversation;
 	public OtherPartyConversation: Conversation;
-	public DidReceiveCallback: object;
+	public DidReceiveCallback: any;
 
 	constructor(apiURL: string, debugURL: string, didReceiveCallback: object) {
 		this.Swarm = new Swarm(apiURL, debugURL);
@@ -332,9 +332,9 @@ class SwapChat {
 				this.OtherPartyCurrentIndex
 			);
 		} catch (e) {
-			console.log(
-				`could not find chunk at index ${this.OtherPartyCurrentIndex} with error ${e}`
-			);
+			// console.log(
+			// 	`could not find chunk at index ${this.OtherPartyCurrentIndex} with error ${e}`
+			// );
 			return false;
 		}
 
@@ -354,8 +354,9 @@ class SwapChat {
 
 		this.OtherPartyConversation.messages.push(message);
 
-		console.log("received", message);
-		// this.DidReceiveCallback(message);
+		//fire callback
+		this.DidReceiveCallback(message);
+
 		return true;
 	}
 

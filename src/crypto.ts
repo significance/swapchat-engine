@@ -55,16 +55,6 @@ class Crypto {
 		return sender.computeSecret(publicKey);
 	}
 
-	// async encryptString(plainText: string, secret: Secret, iv: Nonce): string {
-	// 	return this.encryptBuffer(
-	// 		Buffer.from(string, "utf8"),
-	// 		password,
-	// 		iv
-	// 	).then((encryptedBuffer) => {
-	// 		return encryptedBuffer.toString("hex");
-	// 	});
-	// }
-
 	async encryptBuffer(
 		plainTextBuffer: Buffer,
 		secret: Secret,
@@ -79,15 +69,6 @@ class Crypto {
 			resolve(crypted);
 		});
 	}
-
-	// decryptString(string, password, iv) {
-	// 	let decryptedBuffer = this.decryptBuffer(
-	// 		Buffer.from(string, "hex"),
-	// 		password,
-	// 		iv
-	// 	);
-	// 	return new TextDecoder().decode(decryptedBuffer);
-	// }
 
 	decryptBuffer(cypherTextBuffer: Buffer, secret: Secret, ivBuffer: IV) {
 		var decipher = createDecipheriv("aes-256-ctr", secret, ivBuffer);
