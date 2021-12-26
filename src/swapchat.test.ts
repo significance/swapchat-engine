@@ -1,72 +1,78 @@
 import SwapChat from "./swapchat";
-// import { PublicKey } from "./types";
+import { PublicKey } from "./types";
 import { Message } from "./types";
 
 const apiURL = "http://localhost:1633";
 const debugURL = "http://localhost:1635";
 
-// const TOKEN_LENGTH = 194;
+const TOKEN_LENGTH = 194;
 
 // const sleep = (delay: number) =>
 //   new Promise((resolve) => setTimeout(resolve, delay));
 
-// test("session is initiated", async () => {
-//   let initatorDidRecieve = (...args: any[]) => {
-//     console.log(...args);
-//   };
+test("session is initiated", async () => {
+  let initatorDidRecieve = (...args: any[]) => {
+    console.log(...args);
+  };
 
-//   const respondentDidRecieve = (...args: any[]) => {
-//     console.log(...args);
-//   };
+  const respondentDidRecieve = (...args: any[]) => {
+    console.log(...args);
+  };
 
-//   const swapChatA = new SwapChat(apiURL, debugURL, initatorDidRecieve);
-//   const sessionA = await swapChatA.initiate();
+  const swapChatA = new SwapChat(apiURL, debugURL, initatorDidRecieve);
+  const sessionA = await swapChatA.initiate();
 
-//   const token = sessionA.getToken();
+  const token = sessionA.getToken();
 
-//   expect(token.length).toStrictEqual(TOKEN_LENGTH);
+  expect(token.length).toStrictEqual(TOKEN_LENGTH);
 
-//   const swapChatB = new SwapChat(apiURL, debugURL, respondentDidRecieve);
-//   const sessionB = await swapChatB.respond(token);
+  const swapChatB = new SwapChat(apiURL, debugURL, respondentDidRecieve);
+  const sessionB = await swapChatB.respond(token);
 
-//   expect(sessionA.SharedKeyPair).toStrictEqual(sessionB.SharedKeyPair);
+  expect(sessionA.SharedKeyPair).toStrictEqual(sessionB.SharedKeyPair);
 
-//   const responsePayload = sessionB.getRespondentHandshakePayload() as PublicKey;
+  const responsePayload = sessionB.getRespondentHandshakePayload() as PublicKey;
 
-//   sessionA.parseRespondentHandshakePayload(responsePayload);
+  sessionA.parseRespondentHandshakePayload(responsePayload);
 
-//   expect(sessionA.SharedSecret).toStrictEqual(sessionB.SharedSecret);
+  expect(sessionA.SharedSecret).toStrictEqual(sessionB.SharedSecret);
 
-//   expect(sessionA.handShakeCompleted()).toStrictEqual(true);
-//   expect(sessionB.handShakeCompleted()).toStrictEqual(true);
-// });
+  expect(sessionA.handShakeCompleted()).toStrictEqual(true);
+  expect(sessionB.handShakeCompleted()).toStrictEqual(true);
 
-// test("handshake chunk is sent and received", async () => {
-//   const initatorDidRecieve = (...args: any[]) => {
-//     console.log(...args);
-//   };
+  sessionA.close();
+  sessionB.close();
+});
 
-//   const respondentDidRecieve = (...args: any[]) => {
-//     console.log(...args);
-//   };
+test("handshake chunk is sent and received", async () => {
+  const initatorDidRecieve = (...args: any[]) => {
+    console.log(...args);
+  };
 
-//   const swapChatA = new SwapChat(apiURL, debugURL, initatorDidRecieve);
+  const respondentDidRecieve = (...args: any[]) => {
+    console.log(...args);
+  };
 
-//   const sessionA = await swapChatA.initiate();
-//   const token = sessionA.getToken();
+  const swapChatA = new SwapChat(apiURL, debugURL, initatorDidRecieve);
 
-//   const swapChatB = new SwapChat(apiURL, debugURL, respondentDidRecieve);
-//   const sessionB = await swapChatB.respond(token);
+  const sessionA = await swapChatA.initiate();
+  const token = sessionA.getToken();
 
-//   await sessionA.waitForRespondentHandshakeChunk();
+  const swapChatB = new SwapChat(apiURL, debugURL, respondentDidRecieve);
+  const sessionB = await swapChatB.respond(token);
 
-//   await sessionB.waitForInitiatorHandshakeChunk();
+  await sessionA.waitForRespondentHandshakeChunk();
 
-//   expect(sessionA.SharedSecret).toStrictEqual(sessionB.SharedSecret);
+  await sessionB.waitForInitiatorHandshakeChunk();
 
-//   expect(sessionA.handShakeCompleted()).toStrictEqual(true);
-//   expect(sessionB.handShakeCompleted()).toStrictEqual(true);
-// });
+  expect(sessionA.SharedSecret).toStrictEqual(sessionB.SharedSecret);
+
+  expect(sessionA.handShakeCompleted()).toStrictEqual(true);
+  expect(sessionB.handShakeCompleted()).toStrictEqual(true);
+
+  sessionA.close();
+  sessionB.close();
+});
 
 test("messages are sent and received", async () => {
   const initatorDidRecieve = (...args: any[]) => {
