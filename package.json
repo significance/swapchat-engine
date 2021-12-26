@@ -2,34 +2,47 @@
   "name": "swapchat-engine",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/web/swapchat_engine.js",
   "scripts": {
     "cli": "ts-node src/cli.ts",
     "test": "jest",
     "lint": "eslint src/ --ext .js,.jsx,.ts,.tsx",
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist build",
-    "ts-node": "ts-node"
+    "ts-node": "ts-node",
+    "pack": "webpack --mode production"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@babel/plugin-transform-runtime": "^7.16.5",
+    "@babel/preset-env": "^7.16.5",
+    "@babel/preset-typescript": "^7.16.5",
     "@types/jest": "^27.0.2",
-    "@types/node": "^16.11.10",
+    "@types/node": "^17.0.5",
+    "@types/webpack-dev-server": "^4.5.0",
     "@typescript-eslint/eslint-plugin": "^5.1.0",
     "@typescript-eslint/parser": "^5.1.0",
+    "babel-loader": "^8.2.3",
+    "buffer": "^6.0.3",
+    "core-js": "2",
     "eslint": "^8.1.0",
     "jest": "^27.3.1",
     "ts-jest": "^27.0.7",
     "ts-node": "^10.4.0",
-    "typescript": "^4.4.4"
+    "typescript": "^4.4.4",
+    "webpack": "^5.65.0",
+    "webpack-cli": "^4.9.1",
+    "webpack-dev-server": "^4.7.1"
   },
   "dependencies": {
     "@ethersphere/bee-js": "^3.0.0",
+    "crypto-browserify": "^3.12.0",
     "ethers": "^5.5.1",
     "js-sha3": "^0.8.0",
     "node-webcrypto-ossl": "^2.1.3",
+    "stream-browserify": "^3.0.0",
     "web3": "^1.6.0"
   }
 }

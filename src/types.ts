@@ -14,8 +14,6 @@ export interface PrivateKey extends Buffer {}
 
 export interface Secret extends Buffer {}
 
-export interface Nonce extends number {}
-
 export interface IV extends Buffer {}
 
 export interface KeyPair {
@@ -31,7 +29,7 @@ export type SwarmType<T> = new (...args: any[]) => T;
 export interface Message {
 	index: number;
 	content: string;
-	timestamp: date;
+	timestamp: number;
 }
 
 export interface Conversation {
