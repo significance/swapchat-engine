@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "dist/web/swapchat_engine.js",
+  "types": "dist/tsc/index.d.ts",
   "scripts": {
     "cli": "ts-node src/cli.ts",
     "test": "jest",

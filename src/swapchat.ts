@@ -153,7 +153,7 @@ class SwapChat {
 		try {
 			response = await this.Swarm.readSOC(this.SharedKeyPair.address, 0);
 		} catch (e) {
-			throw new Error("could not find respondent handshake chunk");
+			// throw new Error("could not find respondent handshake chunk");
 		}
 
 		//todo, timeout after a while
@@ -191,7 +191,7 @@ class SwapChat {
 		try {
 			response = await this.Swarm.readSOC(this.SharedKeyPair.address, 1);
 		} catch (e) {
-			throw new Error("could not find initiator handshake chunk");
+			// throw new Error("could not find initiator handshake chunk");
 		}
 
 		//todo, timeout after a while

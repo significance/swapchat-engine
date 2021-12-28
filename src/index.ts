@@ -1,3 +1,3 @@
 import SwapChat from "./swapchat";
 
-export { SwapChat };
+export default SwapChat;

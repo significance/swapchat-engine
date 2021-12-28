@@ -41,6 +41,9 @@ const config: Configuration = {
 		path: path.resolve(__dirname, "dist/web"),
 		filename: "swapchat_engine.js",
 		library: "swapchat_engine",
+		// libraryTarget: "var",
+		libraryTarget: "umd",
+		globalObject: "this",
 	},
 	plugins: [
 		new ProvidePlugin({
