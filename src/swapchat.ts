@@ -286,6 +286,8 @@ class SwapChat {
 			this.OwnCurrentIndex,
 			new Uint8Array(payload)
 		);
+
+		this.OwnConversation.messages.push(message);
 		this.OwnCurrentIndex = this.OwnCurrentIndex + 1;
 		return true;
 	}

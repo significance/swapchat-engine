@@ -128,6 +128,8 @@ test("messages are sent and received", async () => {
 
   await sessionA.send(message_A_0);
 
+  await expect(sessionA.OwnConversation.messages.length).toBe(1);
+
   await expect(
     checkMessageIsReceived(sessionB, message_A_0, index_A_0)
   ).resolves.toBe(true);
@@ -138,6 +140,8 @@ test("messages are sent and received", async () => {
   const message_B_0 = "hello world too";
 
   await sessionB.send(message_B_0);
+
+  await expect(sessionB.OwnConversation.messages.length).toBe(1);
 
   await expect(
     checkMessageIsReceived(sessionA, message_B_0, index_B_0)
@@ -150,6 +154,8 @@ test("messages are sent and received", async () => {
 
   await sessionA.send(message_A_1);
 
+  await expect(sessionA.OwnConversation.messages.length).toBe(2);
+
   await expect(
     checkMessageIsReceived(sessionB, message_A_1, index_A_1)
   ).resolves.toBe(true);
@@ -158,6 +164,8 @@ test("messages are sent and received", async () => {
   const message_B_1 = "hello world three";
 
   await sessionB.send(message_B_1);
+
+  await expect(sessionB.OwnConversation.messages.length).toBe(2);
 
   await expect(
     checkMessageIsReceived(sessionA, message_B_1, index_B_1)
