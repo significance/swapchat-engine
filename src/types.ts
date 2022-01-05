@@ -14,6 +14,8 @@ export interface PrivateKey extends Buffer {}
 
 export interface Secret extends Buffer {}
 
+export interface SecretCode extends Buffer {}
+
 export interface IV extends Buffer {}
 
 export interface KeyPair {

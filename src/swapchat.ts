@@ -6,6 +6,7 @@ import { Utils } from "@ethersphere/bee-js";
 import {
 	KeyPair,
 	Secret,
+	SecretCode,
 	Address,
 	PublicKey,
 	PrivateKey,
@@ -24,6 +25,7 @@ class SwapChat {
 	public Swarm: any;
 	public SharedKeyPair: undefined | KeyPair;
 	public OwnKeyPair: undefined | KeyPair;
+	public SecretCode: undefined | SecretCode;
 	public SharedSecret: undefined | Secret;
 	public IsInitiator: boolean = false;
 	public IsRespondent: boolean = false;
@@ -39,6 +41,7 @@ class SwapChat {
 	constructor(apiURL: string, debugURL: string, didReceiveCallback: object) {
 		this.Swarm = new Swarm(apiURL, debugURL);
 		this.DidReceiveCallback = didReceiveCallback;
+		this.SecretCode = undefined;
 		this.SharedSecret = undefined;
 		this.OtherPartyConversation = this.initialiseOtherPartyConversation();
 		this.OwnConversation = this.initialiseOwnConversation();
@@ -129,6 +132,8 @@ class SwapChat {
 			this.OwnKeyPair.privateKey,
 			respondentPublicKey
 		);
+
+		this.SecretCode = crypto.calculateSecretCode(this.SharedSecret);
 	}
 
 	getRespondentHandshakePayload(): PublicKey {
@@ -216,6 +221,8 @@ class SwapChat {
 			this.OwnKeyPair.privateKey,
 			respondentPublicKey
 		);
+
+		this.SecretCode = crypto.calculateSecretCode(this.SharedSecret);
 
 		this.OtherPartyPublicKey = respondentPublicKey;
 

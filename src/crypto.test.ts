@@ -26,7 +26,7 @@ test("imports private key", () => {
   );
 });
 
-test("calculates shared secret", () => {
+test("calculates shared secret and secret code", () => {
   let keyPair1 = crypto.generateKeyPair();
   let keyPair2 = crypto.generateKeyPair();
 
@@ -42,6 +42,11 @@ test("calculates shared secret", () => {
   expect(sharedSecret1).toStrictEqual(sharedSecret2);
 
   sharedSecret = sharedSecret1;
+
+  let secretCode1 = crypto.calculateSecretCode(sharedSecret1);
+  let secretCode2 = crypto.calculateSecretCode(sharedSecret2);
+
+  expect(secretCode1).toStrictEqual(secretCode2);
 });
 
 test("encrypts buffer with secret", async () => {

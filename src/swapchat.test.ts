@@ -69,6 +69,8 @@ test("session is initiated", async () => {
 
   expect(sessionA.SharedSecret).toStrictEqual(sessionB.SharedSecret);
 
+  expect(sessionA.SecretCode).toStrictEqual(sessionB.SecretCode);
+
   expect(sessionA.handShakeCompleted()).toStrictEqual(true);
   expect(sessionB.handShakeCompleted()).toStrictEqual(true);
 

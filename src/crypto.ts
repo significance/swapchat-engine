@@ -55,6 +55,10 @@ class Crypto {
 		return sender.computeSecret(publicKey);
 	}
 
+	calculateSecretCode(sharedSecret: Secret) {
+		return Buffer.from(keccak256Hash(sharedSecret));
+	}
+
 	async encryptBuffer(
 		plainTextBuffer: Buffer,
 		secret: Secret,
