@@ -27,6 +27,7 @@ class SwapChat {
 	public OwnKeyPair: undefined | KeyPair;
 	public SecretCode: undefined | SecretCode;
 	public SharedSecret: undefined | Secret;
+	public GatewayMode: boolean = false;
 	public IsInitiator: boolean = false;
 	public IsRespondent: boolean = false;
 	public IsPollingForMessages: boolean = false;
@@ -38,13 +39,19 @@ class SwapChat {
 	public OtherPartyConversation: Conversation;
 	public DidReceiveCallback: any;
 
-	constructor(apiURL: string, debugURL: string, didReceiveCallback: object) {
+	constructor(
+		apiURL: string,
+		debugURL: string,
+		didReceiveCallback: object,
+		gatewayMode: boolean
+	) {
 		this.Swarm = new Swarm(apiURL, debugURL);
 		this.DidReceiveCallback = didReceiveCallback;
 		this.SecretCode = undefined;
 		this.SharedSecret = undefined;
 		this.OtherPartyConversation = this.initialiseOtherPartyConversation();
 		this.OwnConversation = this.initialiseOwnConversation();
+		this.GatewayMode = gatewayMode;
 	}
 
 	async initiate() {
@@ -52,7 +59,14 @@ class SwapChat {
 		this.SharedKeyPair = crypto.generateKeyPair();
 		this.OwnKeyPair = crypto.generateKeyPair();
 
-		await this.Swarm.buyStamp();
+		if (this.GatewayMode === false) {
+			await this.Swarm.buyStamp();
+		}
+
+		if (this.GatewayMode === true) {
+			this.Swarm.zeroStamp();
+		}
+
 		return this;
 	}
 
@@ -84,7 +98,13 @@ class SwapChat {
 		this.OwnKeyPair = crypto.generateKeyPair();
 		this.parseToken(token);
 
-		await this.Swarm.buyStamp();
+		if (this.GatewayMode === false) {
+			await this.Swarm.buyStamp();
+		}
+
+		if (this.GatewayMode === true) {
+			this.Swarm.zeroStamp();
+		}
 
 		await this.sendRespondentHandshakeChunk();
 

@@ -25,6 +25,11 @@ class Swarm {
 		this.BatchID = postageBatchId;
 	}
 
+	zeroStamp() {
+		this.BatchID =
+			"0000000000000000000000000000000000000000000000000000000000000000";
+	}
+
 	async writeSOC(keyPair: KeyPair, index: number, data: any) {
 		const topic = Buffer.alloc(32);
 		topic.writeUInt16LE(index, 0);

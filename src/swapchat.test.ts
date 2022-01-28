@@ -51,14 +51,14 @@ let checkMessageIsReceived = (
 };
 
 test("session is initiated", async () => {
-  const swapChatA = new SwapChat(apiURL, debugURL, initiatorDidRecieve);
+  const swapChatA = new SwapChat(apiURL, debugURL, initiatorDidRecieve, false);
   const sessionA = await swapChatA.initiate();
 
   const token = sessionA.getToken();
 
   expect(token.length).toStrictEqual(TOKEN_LENGTH);
 
-  const swapChatB = new SwapChat(apiURL, debugURL, respondentDidRecieve);
+  const swapChatB = new SwapChat(apiURL, debugURL, respondentDidRecieve, false);
   const sessionB = await swapChatB.respond(token);
 
   expect(sessionA.SharedKeyPair).toStrictEqual(sessionB.SharedKeyPair);
@@ -79,12 +79,12 @@ test("session is initiated", async () => {
 });
 
 test("handshake chunk is sent and received", async () => {
-  const swapChatA = new SwapChat(apiURL, debugURL, initiatorDidRecieve);
+  const swapChatA = new SwapChat(apiURL, debugURL, initiatorDidRecieve, false);
 
   const sessionA = await swapChatA.initiate();
   const token = sessionA.getToken();
 
-  const swapChatB = new SwapChat(apiURL, debugURL, respondentDidRecieve);
+  const swapChatB = new SwapChat(apiURL, debugURL, respondentDidRecieve, false);
   const sessionB = await swapChatB.respond(token);
 
   await sessionA.waitForRespondentHandshakeChunk();
@@ -113,12 +113,12 @@ test("messages are sent and received", async () => {
     callbackCountB = callbackCountB + 1;
   };
 
-  const swapChatA = new SwapChat(apiURL, debugURL, callBackIncrementerA);
+  const swapChatA = new SwapChat(apiURL, debugURL, callBackIncrementerA, false);
 
   const sessionA = await swapChatA.initiate();
   const token = sessionA.getToken();
 
-  const swapChatB = new SwapChat(apiURL, debugURL, callBackIncrementerB);
+  const swapChatB = new SwapChat(apiURL, debugURL, callBackIncrementerB, false);
   const sessionB = await swapChatB.respond(token);
 
   await sessionA.waitForRespondentHandshakeChunk();
