@@ -11,7 +11,8 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist build",
     "ts-node": "ts-node",
-    "pack": "webpack --mode production"
+    "pack": "webpack --mode production",
+    "prepare": "webpack --mode production"
   },
   "keywords": [],
   "author": "",
