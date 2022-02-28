@@ -9,6 +9,9 @@ const initiatorDidRecieve = console.log;
 const respondentDidRecieve = console.log;
 
 const TOKEN_LENGTH = 194;
+const RESTORE_TOKEN_LENGTH = 428;
+
+jest.setTimeout(20000);
 
 let checkMessageIsReceived = (
   session: any,
@@ -18,7 +21,6 @@ let checkMessageIsReceived = (
   let retries = 0;
   let interval: any;
   return new Promise((resolve, reject) => {
-    // console.log("cCC");
     interval = setInterval(async () => {
       if (retries > 10) {
         reject("too many retries");
@@ -100,6 +102,19 @@ test("handshake chunk is sent and received", async () => {
   sessionB.close();
 });
 
+let restoreTokenA: string;
+
+let restoreTokenB: string;
+
+const index_A_0 = 0;
+const message_A_0 = "hello world one";
+const index_B_0 = 0;
+const message_B_0 = "hello world too";
+const index_A_1 = 1;
+const message_A_1 = "hello world three";
+const index_B_1 = 1;
+const message_B_1 = "hello world four";
+
 test("messages are sent and received", async () => {
   let callbackCountA = 0;
 
@@ -125,8 +140,11 @@ test("messages are sent and received", async () => {
 
   await sessionB.waitForInitiatorHandshakeChunk();
 
-  let index_A_0 = 0;
-  let message_A_0 = "hello world one";
+  restoreTokenA = sessionA.getRestorationToken();
+  await expect(restoreTokenA.length).toBe(RESTORE_TOKEN_LENGTH);
+
+  restoreTokenB = sessionB.getRestorationToken();
+  await expect(restoreTokenB.length).toBe(RESTORE_TOKEN_LENGTH);
 
   await sessionA.send(message_A_0);
 
@@ -138,9 +156,6 @@ test("messages are sent and received", async () => {
 
   expect(callbackCountB).toBe(1);
 
-  const index_B_0 = 0;
-  const message_B_0 = "hello world too";
-
   await sessionB.send(message_B_0);
 
   await expect(sessionB.OwnConversation.messages.length).toBe(1);
@@ -151,9 +166,6 @@ test("messages are sent and received", async () => {
 
   expect(callbackCountA).toBe(1);
 
-  const index_A_1 = 1;
-  const message_A_1 = "hello world three";
-
   await sessionA.send(message_A_1);
 
   await expect(sessionA.OwnConversation.messages.length).toBe(2);
@@ -161,9 +173,6 @@ test("messages are sent and received", async () => {
   await expect(
     checkMessageIsReceived(sessionB, message_A_1, index_A_1)
   ).resolves.toBe(true);
-
-  const index_B_1 = 1;
-  const message_B_1 = "hello world three";
 
   await sessionB.send(message_B_1);
 
@@ -176,3 +185,65 @@ test("messages are sent and received", async () => {
   sessionA.close();
   sessionB.close();
 }, 100000);
+
+test("conversations are persisted and restored and new messages are sent and received", async () => {
+  let callbackCountA = 0;
+
+  let callBackIncrementerA = () => {
+    callbackCountA = callbackCountA + 1;
+  };
+
+  let callbackCountB = 0;
+
+  let callBackIncrementerB = () => {
+    callbackCountB = callbackCountB + 1;
+  };
+
+  const swapChatA = new SwapChat(apiURL, debugURL, callBackIncrementerA, false);
+
+  const sessionA = await swapChatA.restoreFromToken(restoreTokenA);
+
+  await expect(
+    checkMessageIsReceived(sessionA, message_B_0, index_B_0)
+  ).resolves.toBe(true);
+
+  await expect(
+    checkMessageIsReceived(sessionA, message_B_1, index_B_1)
+  ).resolves.toBe(true);
+
+  const swapChatB = new SwapChat(apiURL, debugURL, callBackIncrementerB, false);
+
+  const sessionB = await swapChatB.restoreFromToken(restoreTokenB);
+
+  await expect(
+    checkMessageIsReceived(sessionB, message_A_0, index_A_0)
+  ).resolves.toBe(true);
+
+  await expect(
+    checkMessageIsReceived(sessionB, message_A_1, index_A_1)
+  ).resolves.toBe(true);
+
+  await expect(sessionA.OwnConversation.messages.length).toBe(2);
+  await expect(sessionB.OwnConversation.messages.length).toBe(2);
+
+  const index_A_2 = 2;
+  const message_A_2 = "hello world five";
+  await sessionA.send(message_A_2);
+
+  await expect(sessionA.OwnConversation.messages.length).toBe(3);
+  await expect(
+    checkMessageIsReceived(sessionB, message_A_2, index_A_2)
+  ).resolves.toBe(true);
+
+  const index_B_2 = 2;
+  const message_B_2 = "hello world six";
+  await sessionB.send(message_A_2);
+
+  await expect(sessionB.OwnConversation.messages.length).toBe(3);
+  await expect(
+    checkMessageIsReceived(sessionA, message_B_2, index_B_2)
+  ).resolves.toBe(true);
+
+  sessionA.close();
+  sessionB.close();
+});

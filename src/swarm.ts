@@ -17,17 +17,27 @@ class Swarm {
 		this.BeeDebug = new BeeDebug(debugURL);
 	}
 
+	async useStamp(postageBatchId: string) {
+		this.BatchID = postageBatchId;
+
+		return this.BatchID;
+	}
+
 	async buyStamp() {
 		const postageBatchId = await this.BeeDebug.createPostageBatch(
 			"100",
 			17
 		);
 		this.BatchID = postageBatchId;
+
+		return this.BatchID;
 	}
 
 	zeroStamp() {
 		this.BatchID =
 			"0000000000000000000000000000000000000000000000000000000000000000";
+
+		return this.BatchID;
 	}
 
 	async writeSOC(keyPair: KeyPair, index: number, data: any) {
