@@ -14,12 +14,10 @@ import {
 	Conversation,
 } from "./types";
 
-const RECEIVE_POLL_MILLISECONDS = 2000;
 const PUBLIC_KEY_LENGTH = 130;
 const PRIVATE_KEY_LENGTH = 64;
 const ADDRESS_LENGTH = 40;
 const STAMP_LENGTH = 64;
-const POLL_PAUSE = 5000;
 
 const sleep = (delay: number) =>
 	new Promise((resolve) => setTimeout(resolve, delay));
@@ -43,12 +41,14 @@ class SwapChat {
 	public OtherPartyConversation: Conversation;
 	public DidReceiveCallback: any;
 	public BatchID: undefined | string;
+	public PollMilliseconds: number = 5000;
 
 	constructor(
 		apiURL: string,
 		debugURL: string,
 		didReceiveCallback: object,
-		gatewayMode: boolean
+		gatewayMode: boolean,
+		pollMilliseconds: number
 	) {
 		this.Swarm = new Swarm(apiURL, debugURL);
 		this.DidReceiveCallback = didReceiveCallback;
@@ -57,6 +57,7 @@ class SwapChat {
 		this.OtherPartyConversation = this.initialiseOtherPartyConversation();
 		this.OwnConversation = this.initialiseOwnConversation();
 		this.GatewayMode = gatewayMode;
+		this.PollMilliseconds = pollMilliseconds;
 	}
 
 	async restore() {
@@ -376,7 +377,7 @@ class SwapChat {
 		//todo, timeout after a while
 		if (response === undefined) {
 			console.log("trying to find respondent handshake chunk");
-			await sleep(POLL_PAUSE);
+			await sleep(this.PollMilliseconds);
 			return await this.waitForRespondentHandshakeChunk();
 		}
 
@@ -414,7 +415,7 @@ class SwapChat {
 		//todo, timeout after a while
 		if (response === undefined) {
 			console.log("trying to find initiator handshake chunk");
-			await sleep(POLL_PAUSE);
+			await sleep(this.PollMilliseconds);
 			return await this.waitForInitiatorHandshakeChunk();
 		}
 
@@ -542,7 +543,7 @@ class SwapChat {
 				return;
 			}
 			this.setReceiveLoop();
-		}, RECEIVE_POLL_MILLISECONDS);
+		}, this.PollMilliseconds);
 	}
 
 	async restoreConversation(): Promise<boolean> {
@@ -597,7 +598,7 @@ class SwapChat {
 				return;
 			}
 			this.setRestoreConversationLoop();
-		}, RECEIVE_POLL_MILLISECONDS);
+		}, this.PollMilliseconds);
 	}
 
 	async receive(): Promise<boolean> {

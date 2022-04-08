@@ -10,6 +10,7 @@ const respondentDidRecieve = console.log;
 
 const TOKEN_LENGTH = 194;
 const RESTORE_TOKEN_LENGTH = 428;
+const POLL_TIME = 1000;
 
 jest.setTimeout(20000);
 
@@ -53,14 +54,26 @@ let checkMessageIsReceived = (
 };
 
 test("session is initiated", async () => {
-  const swapChatA = new SwapChat(apiURL, debugURL, initiatorDidRecieve, false);
+  const swapChatA = new SwapChat(
+    apiURL,
+    debugURL,
+    initiatorDidRecieve,
+    false,
+    POLL_TIME
+  );
   const sessionA = await swapChatA.initiate();
 
   const token = sessionA.getToken();
 
   expect(token.length).toStrictEqual(TOKEN_LENGTH);
 
-  const swapChatB = new SwapChat(apiURL, debugURL, respondentDidRecieve, false);
+  const swapChatB = new SwapChat(
+    apiURL,
+    debugURL,
+    respondentDidRecieve,
+    false,
+    POLL_TIME
+  );
   const sessionB = await swapChatB.respond(token);
 
   expect(sessionA.SharedKeyPair).toStrictEqual(sessionB.SharedKeyPair);
@@ -81,12 +94,24 @@ test("session is initiated", async () => {
 });
 
 test("handshake chunk is sent and received", async () => {
-  const swapChatA = new SwapChat(apiURL, debugURL, initiatorDidRecieve, false);
+  const swapChatA = new SwapChat(
+    apiURL,
+    debugURL,
+    initiatorDidRecieve,
+    false,
+    POLL_TIME
+  );
 
   const sessionA = await swapChatA.initiate();
   const token = sessionA.getToken();
 
-  const swapChatB = new SwapChat(apiURL, debugURL, respondentDidRecieve, false);
+  const swapChatB = new SwapChat(
+    apiURL,
+    debugURL,
+    respondentDidRecieve,
+    false,
+    POLL_TIME
+  );
   const sessionB = await swapChatB.respond(token);
 
   await sessionA.waitForRespondentHandshakeChunk();
@@ -128,12 +153,24 @@ test("messages are sent and received", async () => {
     callbackCountB = callbackCountB + 1;
   };
 
-  const swapChatA = new SwapChat(apiURL, debugURL, callBackIncrementerA, false);
+  const swapChatA = new SwapChat(
+    apiURL,
+    debugURL,
+    callBackIncrementerA,
+    false,
+    POLL_TIME
+  );
 
   const sessionA = await swapChatA.initiate();
   const token = sessionA.getToken();
 
-  const swapChatB = new SwapChat(apiURL, debugURL, callBackIncrementerB, false);
+  const swapChatB = new SwapChat(
+    apiURL,
+    debugURL,
+    callBackIncrementerB,
+    false,
+    POLL_TIME
+  );
   const sessionB = await swapChatB.respond(token);
 
   await sessionA.waitForRespondentHandshakeChunk();
@@ -199,7 +236,13 @@ test("conversations are persisted and restored and new messages are sent and rec
     callbackCountB = callbackCountB + 1;
   };
 
-  const swapChatA = new SwapChat(apiURL, debugURL, callBackIncrementerA, false);
+  const swapChatA = new SwapChat(
+    apiURL,
+    debugURL,
+    callBackIncrementerA,
+    false,
+    POLL_TIME
+  );
 
   const sessionA = await swapChatA.restoreFromToken(restoreTokenA);
 
@@ -211,7 +254,13 @@ test("conversations are persisted and restored and new messages are sent and rec
     checkMessageIsReceived(sessionA, message_B_1, index_B_1)
   ).resolves.toBe(true);
 
-  const swapChatB = new SwapChat(apiURL, debugURL, callBackIncrementerB, false);
+  const swapChatB = new SwapChat(
+    apiURL,
+    debugURL,
+    callBackIncrementerB,
+    false,
+    POLL_TIME
+  );
 
   const sessionB = await swapChatB.restoreFromToken(restoreTokenB);
 

@@ -1,6 +1,6 @@
 {
   "name": "swapchat",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "",
   "main": "dist/web/swapchat_engine.js",
   "types": "dist/tsc/index.d.ts",
