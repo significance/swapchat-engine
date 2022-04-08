@@ -19,6 +19,7 @@ const PUBLIC_KEY_LENGTH = 130;
 const PRIVATE_KEY_LENGTH = 64;
 const ADDRESS_LENGTH = 40;
 const STAMP_LENGTH = 64;
+const POLL_PAUSE = 5000;
 
 const sleep = (delay: number) =>
 	new Promise((resolve) => setTimeout(resolve, delay));
@@ -375,7 +376,7 @@ class SwapChat {
 		//todo, timeout after a while
 		if (response === undefined) {
 			console.log("trying to find respondent handshake chunk");
-			await sleep(1000);
+			await sleep(POLL_PAUSE);
 			return await this.waitForRespondentHandshakeChunk();
 		}
 
@@ -413,7 +414,7 @@ class SwapChat {
 		//todo, timeout after a while
 		if (response === undefined) {
 			console.log("trying to find initiator handshake chunk");
-			await sleep(1000);
+			await sleep(POLL_PAUSE);
 			return await this.waitForInitiatorHandshakeChunk();
 		}
 
