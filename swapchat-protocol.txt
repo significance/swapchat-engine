@@ -1,3 +1,26 @@
+Abstract
+--------
+
+Discussion of protocols. PR's and comments encouraged and welcomed!
+
+=======
+Current
+=======
+
+Discourse
+---------
+
+The current system is a first stab. It uses the unusual method of sharing of private key material. This is general is taboo in crytography as the assumption is made that private key material is not shared. 
+
+In this *very special case* where *there are only two parties involved* and *the key is ephemeral and only used for the handshake* and *the handshake is only required prior to the usage of the resultant handshake* it can be assumed that *each party is incentivised to not mess up the process*.
+
+However, this clearly is not the best option. Upon interrogation, it seems that sharing the private key with the above set of stipulations does not pose any significant security risk (afaiu), it is still possible that either party (or indeed anyone intercepting the ephemeral key in transit) are able to cause collisions in the SOC space which, during the handshake phase, could potentially cause undesirable effects.
+
+The current methodology also currently leaks the public keys of both "conversation" keys which will allow an observer (eg. gateway, anyone who crawls the network for feeds which exhibit the characteristics of these chunks, others...). It is also possible for anyone who intercepts the private key to mitm the handshake, intercept all messages and insert their own.
+
+Protocol
+--------
+
 1. Alice generates ephemeral key E and sends to Bob via a secure channel
 2. Alice 
 	i.   generates encryption key A
@@ -17,3 +40,45 @@
 	ii.  watch for existence of A0 and B0 respectively with topic S(T) and index S(0) and use S to determine P
 	iii. if index S(n) exists, look for next soc at index S(n+1)
 7. (optional) Bob and Alice confirm channel by secure channel/IRL
+
+=============
+Alternative 1
+=============
+
+Send Publickey plus salt, user simply calculates soc location and starts to watch it, no ephermeral key. The next index is encrypted within each message. Optionally, the users can supply the initial index off band.
+
+Metadata Leaked
+
+If the pub key and salt are intercepted, the attacker can discover that the conversation has been initiated. If the index scheme is predictable then the extent of the conversation will be able to be determined. If the initiating user sends an encrypted initial salt, only the fact that a conversation has been initiated will be known.
+
+Problem
+
+pub key is unknown, this is what the feed is for
+
+=============
+Alternative 2
+=============
+
+Use current, then continue to use the dh to exchange further keys / topics. This has the advantage of hiding the extent of the conversation (how many messages are exchanged and when)
+
+=============
+Alternative 3
+=============
+
+Universal Outbox
+
+1. Alice creates a key pair A
+2. Bob creates a key pair B 
+2. Alice creates ephemeral keys AE0....AEn and uses A to create socs with index 0...n and topic X at addresses F1...Fn, each with a payload containing ephemeral private keys privAEi
+3. Bob reconstructs the socs addresses for F1...Fn and for each of these...
+	i.   checks to see whether a soc G1 creatd with the key pair AE0 with index 0 and topic Y already exists 
+	ii.  if it does, disregard AE0 and try again with AE1
+	iii. if it does not, create a diffie-hellman shared secret SE with and ephemeral key privBE0 and pubA and use this to encrypt pubB to get EpubB
+	iv.  use AE0 to create soc G1 with payload pubBE0 and EpubB
+4. Alice watches socs G1...Gn, if one is found to exist, they retrieve the content which in Bobs case will be pub BE0 and EpubB
+5. Alice retrieves Gi and using the diffie-hellman secret SE created using privA and pubBE0 decrypts EpubB to get pubB
+6. Alice constructs the shared secret of privA and pubB S and uses it to encrypt secret topic U
+7. Alice begins creating messages for Bob at socs J1....Jn encrypted with shared secret S
+8. Bob recreates S using privB and pubA and watches addressees for S as created by A, J1....Jn, retrieves them and then decrypts them using S.
+
+nb. is it possible/feasible to scan an entire soc address space?
