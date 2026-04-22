@@ -14,12 +14,18 @@ import {
 	PrivateKey,
 	Message,
 	Conversation,
+	MlKemKeyPair,
+	MlKemCiphertext,
 } from "./types";
 
 const PUBLIC_KEY_LENGTH = 130;
 const PRIVATE_KEY_LENGTH = 64;
 const ADDRESS_LENGTH = 40;
 const STAMP_LENGTH = 64;
+const MLKEM_ENCAP_KEY_HEX_LENGTH = 2368; // 1184 bytes
+const MLKEM_CIPHERTEXT_LENGTH = 1088; // bytes
+const SECP256K1_PUBKEY_LENGTH = 65; // bytes
+const SHARED_SECRET_HEX_LENGTH = 64; // 32 bytes
 
 const sleep = (delay: number) =>
 	new Promise((resolve) => setTimeout(resolve, delay));
@@ -44,6 +50,8 @@ class SwapChat {
 	public DidReceiveCallback: any;
 	public BatchID: undefined | string;
 	public PollMilliseconds: number = 5000;
+	public MlKemKeyPair: undefined | MlKemKeyPair;
+	public MlKemCiphertext: undefined | MlKemCiphertext;
 
 	constructor(
 		apiURL: string,
@@ -83,10 +91,9 @@ class SwapChat {
 			throw new Error("must provide other party public key");
 		}
 
-		this.SharedSecret = crypto.calculateSharedSecret(
-			this.OwnKeyPair.privateKey,
-			this.OtherPartyPublicKey
-		);
+		if (this.SharedSecret === undefined) {
+			throw new Error("must provide shared secret");
+		}
 
 		this.SecretCode = crypto.calculateSecretCode(this.SharedSecret);
 
@@ -113,131 +120,68 @@ class SwapChat {
 			throw new Error("Could not find stamp");
 		}
 
+		if (this.SharedSecret === undefined) {
+			throw new Error("Could not find shared secret");
+		}
+
 		const ownAddressHex = this.OwnKeyPair.address.toString("hex");
 		const ownPublicKeyHex = this.OwnKeyPair.publicKey.toString("hex");
 		const ownPrivateKeyHex = this.OwnKeyPair.privateKey.toString("hex");
-		const stampHex = this.BatchID;
-
 		const otherPartyPublicKeyHex = Buffer.from(
 			this.OtherPartyPublicKey
 		).toString("hex");
-
-		if (ownAddressHex.length !== ADDRESS_LENGTH) {
-			throw new Error(
-				`ownAddressHex must be ${ADDRESS_LENGTH} characters long, is ${ownAddressHex.length}`
-			);
-		}
-
-		if (ownPublicKeyHex.length !== PUBLIC_KEY_LENGTH) {
-			throw new Error(
-				`ownPublicKeyHex must be ${PUBLIC_KEY_LENGTH} characters long, is ${ownPublicKeyHex.length}`
-			);
-		}
-
-		if (ownPrivateKeyHex.length !== PRIVATE_KEY_LENGTH) {
-			throw new Error(
-				`ownPrivateKeyHex must be ${PRIVATE_KEY_LENGTH} characters long, is ${ownPrivateKeyHex.length}`
-			);
-		}
-
-		if (otherPartyPublicKeyHex.length !== PUBLIC_KEY_LENGTH) {
-			throw new Error(
-				`otherPartyPublicKeyHex must be ${PUBLIC_KEY_LENGTH} characters long, is ${otherPartyPublicKeyHex.length}`
-			);
-		}
-
-		if (stampHex.length !== STAMP_LENGTH) {
-			throw new Error(
-				`stamp must be ${STAMP_LENGTH} characters long, is ${stampHex.length}`
-			);
-		}
+		const sharedSecretHex = Buffer.from(this.SharedSecret).toString("hex");
+		const stampHex = this.BatchID;
 
 		return (
 			ownAddressHex +
 			ownPublicKeyHex +
 			ownPrivateKeyHex +
 			otherPartyPublicKeyHex +
+			sharedSecretHex +
 			stampHex
 		);
 	}
 
 	parseRestorationToken(token: string) {
-		let tokenLength =
+		const tokenLength =
 			ADDRESS_LENGTH +
 			PUBLIC_KEY_LENGTH +
 			PRIVATE_KEY_LENGTH +
 			PUBLIC_KEY_LENGTH +
+			SHARED_SECRET_HEX_LENGTH +
 			STAMP_LENGTH;
 
 		if (token.length !== tokenLength) {
-			throw new Error(`token must be ${tokenLength} characters long`);
-		}
-
-		const ownAddressHex = token.substr(0, ADDRESS_LENGTH);
-
-		const ownPublicKeyHex = token.substr(ADDRESS_LENGTH, PUBLIC_KEY_LENGTH);
-
-		const ownPrivateKeyHex = token.substr(
-			ADDRESS_LENGTH + PUBLIC_KEY_LENGTH,
-			PRIVATE_KEY_LENGTH
-		);
-
-		const otherPartyPublicKeyHex = token.substr(
-			ADDRESS_LENGTH + PUBLIC_KEY_LENGTH + PRIVATE_KEY_LENGTH,
-			PUBLIC_KEY_LENGTH
-		);
-
-		const stampHex = token.substr(
-			ADDRESS_LENGTH +
-				PUBLIC_KEY_LENGTH +
-				PRIVATE_KEY_LENGTH +
-				PUBLIC_KEY_LENGTH,
-			STAMP_LENGTH
-		);
-
-		if (ownAddressHex.length !== ADDRESS_LENGTH) {
 			throw new Error(
-				`ownAddressHex must be ${ADDRESS_LENGTH} characters long, is ${ownAddressHex.length}`
+				`token must be ${tokenLength} characters long, is ${token.length}`
 			);
 		}
 
-		if (ownPublicKeyHex.length !== PUBLIC_KEY_LENGTH) {
-			throw new Error(
-				`ownPublicKeyHex must be ${PUBLIC_KEY_LENGTH} characters long, is ${ownPublicKeyHex.length}`
-			);
-		}
+		let offset = 0;
+		const ownAddressHex = token.substr(offset, ADDRESS_LENGTH);
+		offset += ADDRESS_LENGTH;
+		const ownPublicKeyHex = token.substr(offset, PUBLIC_KEY_LENGTH);
+		offset += PUBLIC_KEY_LENGTH;
+		const ownPrivateKeyHex = token.substr(offset, PRIVATE_KEY_LENGTH);
+		offset += PRIVATE_KEY_LENGTH;
+		const otherPartyPublicKeyHex = token.substr(offset, PUBLIC_KEY_LENGTH);
+		offset += PUBLIC_KEY_LENGTH;
+		const sharedSecretHex = token.substr(offset, SHARED_SECRET_HEX_LENGTH);
+		offset += SHARED_SECRET_HEX_LENGTH;
+		const stampHex = token.substr(offset, STAMP_LENGTH);
 
-		if (ownPrivateKeyHex.length !== PRIVATE_KEY_LENGTH) {
-			throw new Error(
-				`ownPrivateKeyHex must be ${PRIVATE_KEY_LENGTH} characters long, is ${ownPrivateKeyHex.length}`
-			);
-		}
-
-		if (otherPartyPublicKeyHex.length !== PUBLIC_KEY_LENGTH) {
-			throw new Error(
-				`otherPartyPublicKeyHex must be ${PUBLIC_KEY_LENGTH} characters long, is ${otherPartyPublicKeyHex.length}`
-			);
-		}
-
-		if (stampHex.length !== STAMP_LENGTH) {
-			throw new Error(
-				`stamp must be ${STAMP_LENGTH} characters long, is ${stampHex.length}`
-			);
-		}
-
-		const OwnKeyPair = {
+		this.OwnKeyPair = {
 			address: hexToBytes(ownAddressHex) as Address,
 			privateKey: hexToBytes(ownPrivateKeyHex) as PrivateKey,
 			publicKey: hexToBytes(ownPublicKeyHex) as PublicKey,
 		};
 
-		this.OwnKeyPair = OwnKeyPair;
-
-		const otherPartyPublicKey = hexToBytes(
+		this.OtherPartyPublicKey = hexToBytes(
 			otherPartyPublicKeyHex
 		) as PublicKey;
 
-		this.OtherPartyPublicKey = otherPartyPublicKey;
+		this.SharedSecret = hexToBytes(sharedSecretHex) as Secret;
 
 		this.BatchID = stampHex;
 	}
@@ -252,6 +196,7 @@ class SwapChat {
 		this.IsInitiator = true;
 		this.SharedKeyPair = crypto.generateKeyPair();
 		this.OwnKeyPair = crypto.generateKeyPair();
+		this.MlKemKeyPair = crypto.generateMlKemKeyPair();
 
 		if (this.BatchID !== undefined) {
 			await this.Swarm.useStamp(this.BatchID);
@@ -269,8 +214,15 @@ class SwapChat {
 			throw new Error("Could not find key pairs");
 		}
 
+		if (this.MlKemKeyPair === undefined) {
+			throw new Error("Could not find ML-KEM key pair");
+		}
+
 		const privateKeyHex = this.SharedKeyPair.privateKey.toString("hex");
 		const publicKeyHex = this.OwnKeyPair.publicKey.toString("hex");
+		const mlkemEncapKeyHex = Buffer.from(
+			this.MlKemKeyPair.encapsulationKey
+		).toString("hex");
 
 		if (privateKeyHex.length !== PRIVATE_KEY_LENGTH) {
 			throw new Error(
@@ -284,7 +236,13 @@ class SwapChat {
 			);
 		}
 
-		return privateKeyHex + publicKeyHex;
+		if (mlkemEncapKeyHex.length !== MLKEM_ENCAP_KEY_HEX_LENGTH) {
+			throw new Error(
+				`mlkemEncapKeyHex must be ${MLKEM_ENCAP_KEY_HEX_LENGTH} characters long, is ${mlkemEncapKeyHex.length}`
+			);
+		}
+
+		return privateKeyHex + publicKeyHex + mlkemEncapKeyHex;
 	}
 
 	async respond(token: string) {
@@ -306,27 +264,28 @@ class SwapChat {
 	}
 
 	parseToken(token: string): void {
-		if (token.length !== PRIVATE_KEY_LENGTH + PUBLIC_KEY_LENGTH) {
+		const expectedLength =
+			PRIVATE_KEY_LENGTH + PUBLIC_KEY_LENGTH + MLKEM_ENCAP_KEY_HEX_LENGTH;
+
+		if (token.length !== expectedLength) {
 			throw new Error(
-				`token must be ${
-					PRIVATE_KEY_LENGTH + PUBLIC_KEY_LENGTH
-				} characters long`
+				`token must be ${expectedLength} characters long, is ${token.length}`
 			);
 		}
 
 		const sharedPrivateKeyHex = token.substr(0, PRIVATE_KEY_LENGTH);
 		const respondentPublicKeyHex = token.substr(
 			PRIVATE_KEY_LENGTH,
-			PRIVATE_KEY_LENGTH + PUBLIC_KEY_LENGTH
+			PUBLIC_KEY_LENGTH
+		);
+		const mlkemEncapKeyHex = token.substr(
+			PRIVATE_KEY_LENGTH + PUBLIC_KEY_LENGTH,
+			MLKEM_ENCAP_KEY_HEX_LENGTH
 		);
 
-		const sharedPrivateKey = hexToBytes(
-			sharedPrivateKeyHex
-		) as PrivateKey;
-
-		const respondentPublicKey = hexToBytes(
-			respondentPublicKeyHex
-		) as PublicKey;
+		const sharedPrivateKey = hexToBytes(sharedPrivateKeyHex) as PrivateKey;
+		const respondentPublicKey = hexToBytes(respondentPublicKeyHex) as PublicKey;
+		const mlkemEncapKey = new Uint8Array(hexToBytes(mlkemEncapKeyHex));
 
 		this.OtherPartyPublicKey = respondentPublicKey;
 
@@ -342,20 +301,35 @@ class SwapChat {
 			throw new Error("could not find own key pair");
 		}
 
-		this.SharedSecret = crypto.calculateSharedSecret(
+		// Hybrid key exchange: ECDH + ML-KEM
+		const ecdhSecret = crypto.calculateSharedSecret(
 			this.OwnKeyPair.privateKey,
 			respondentPublicKey
 		);
 
+		const { ciphertext, sharedSecret: mlkemSecret } =
+			crypto.mlKemEncapsulate(mlkemEncapKey);
+
+		this.MlKemCiphertext = ciphertext;
+
+		this.SharedSecret = crypto.deriveHybridSecret(ecdhSecret, mlkemSecret);
 		this.SecretCode = crypto.calculateSecretCode(this.SharedSecret);
 	}
 
-	getRespondentHandshakePayload(): PublicKey {
-		// todo encrypt this using something from token?
+	getRespondentHandshakePayload(): Uint8Array {
 		if (this.OwnKeyPair === undefined) {
 			throw new Error("Could not find publickey");
 		}
-		return this.OwnKeyPair.publicKey;
+		if (this.MlKemCiphertext === undefined) {
+			throw new Error("Could not find ML-KEM ciphertext");
+		}
+		// Concatenate secp256k1 public key (65 bytes) + ML-KEM ciphertext (1088 bytes)
+		const payload = new Uint8Array(
+			SECP256K1_PUBKEY_LENGTH + MLKEM_CIPHERTEXT_LENGTH
+		);
+		payload.set(this.OwnKeyPair.publicKey, 0);
+		payload.set(this.MlKemCiphertext, SECP256K1_PUBKEY_LENGTH);
+		return payload;
 	}
 
 	async sendRespondentHandshakeChunk() {
@@ -384,9 +358,7 @@ class SwapChat {
 
 		await this.sendInitiatorHandshakeChunk();
 
-		this.parseRespondentHandshakePayload(
-			Buffer.from(response.payload.toUint8Array())
-		);
+		this.parseRespondentHandshakePayload(response.payload.toUint8Array());
 
 		this.IsPollingForMessages = true;
 		this.setReceiveLoop();
@@ -428,24 +400,45 @@ class SwapChat {
 		return;
 	}
 
-	parseRespondentHandshakePayload(respondentPublicKey: PublicKey) {
+	parseRespondentHandshakePayload(payload: Uint8Array) {
 		if (this.OwnKeyPair === undefined) {
 			throw new Error("could not find own key pair");
 		}
 
-		this.SharedSecret = crypto.calculateSharedSecret(
+		if (this.MlKemKeyPair === undefined) {
+			throw new Error("could not find ML-KEM key pair");
+		}
+
+		if (payload.length !== SECP256K1_PUBKEY_LENGTH + MLKEM_CIPHERTEXT_LENGTH) {
+			throw new Error(
+				`handshake payload must be ${
+					SECP256K1_PUBKEY_LENGTH + MLKEM_CIPHERTEXT_LENGTH
+				} bytes, is ${payload.length}`
+			);
+		}
+
+		const respondentPublicKey = Buffer.from(
+			payload.slice(0, SECP256K1_PUBKEY_LENGTH)
+		) as PublicKey;
+		const mlkemCiphertext = payload.slice(
+			SECP256K1_PUBKEY_LENGTH
+		) as MlKemCiphertext;
+
+		// Hybrid key exchange: ECDH + ML-KEM
+		const ecdhSecret = crypto.calculateSharedSecret(
 			this.OwnKeyPair.privateKey,
 			respondentPublicKey
 		);
 
+		const mlkemSecret = crypto.mlKemDecapsulate(
+			this.MlKemKeyPair.decapsulationKey,
+			mlkemCiphertext
+		);
+
+		this.SharedSecret = crypto.deriveHybridSecret(ecdhSecret, mlkemSecret);
 		this.SecretCode = crypto.calculateSecretCode(this.SharedSecret);
 
 		this.OtherPartyPublicKey = respondentPublicKey;
-
-		if (this.OtherPartyPublicKey === undefined) {
-			throw new Error("could not find other party public key");
-		}
-
 		this.OtherPartyAddress = crypto.publicKeyToAddress(respondentPublicKey);
 	}
 

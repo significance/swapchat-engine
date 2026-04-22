@@ -40,6 +40,8 @@
   },
   "dependencies": {
     "@ethersphere/bee-js": "^12.0.0",
+    "@noble/hashes": "^2.2.0",
+    "@noble/post-quantum": "^0.6.1",
     "crypto-browserify": "^3.12.1",
     "ethers": "^5.8.0",
     "js-sha3": "^0.9.3",

@@ -1,8 +1,22 @@
-import { KeyPair, PublicKey, PrivateKey, Secret, IV } from "./types";
+import {
+	KeyPair,
+	PublicKey,
+	PrivateKey,
+	Secret,
+	IV,
+	MlKemKeyPair,
+	MlKemEncapsulationKey,
+	MlKemDecapsulationKey,
+	MlKemCiphertext,
+} from "./types";
 
 import { keccak256Hash } from "./utils";
 
 import { createECDH, createCipheriv, createDecipheriv } from "crypto";
+
+import { ml_kem768 } from "@noble/post-quantum/ml-kem.js";
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 
 class Crypto {
 	ivFromUint(int: number) {
@@ -81,6 +95,39 @@ class Crypto {
 			decipher.final(),
 		]);
 		return dec;
+	}
+
+	generateMlKemKeyPair(): MlKemKeyPair {
+		const keys = ml_kem768.keygen();
+		return {
+			encapsulationKey: keys.publicKey as MlKemEncapsulationKey,
+			decapsulationKey: keys.secretKey as MlKemDecapsulationKey,
+		};
+	}
+
+	mlKemEncapsulate(encapsulationKey: MlKemEncapsulationKey): {
+		ciphertext: MlKemCiphertext;
+		sharedSecret: Uint8Array;
+	} {
+		const result = ml_kem768.encapsulate(encapsulationKey);
+		return {
+			ciphertext: result.cipherText as MlKemCiphertext,
+			sharedSecret: result.sharedSecret,
+		};
+	}
+
+	mlKemDecapsulate(
+		decapsulationKey: Uint8Array,
+		ciphertext: MlKemCiphertext
+	): Uint8Array {
+		return ml_kem768.decapsulate(ciphertext, decapsulationKey);
+	}
+
+	deriveHybridSecret(ecdhSecret: Buffer, mlkemSecret: Uint8Array): Secret {
+		const combined = Buffer.concat([ecdhSecret, Buffer.from(mlkemSecret)]);
+		const info = new TextEncoder().encode("swapchat-hybrid");
+		const derived = hkdf(sha256, combined, undefined, info, 32);
+		return Buffer.from(derived) as Secret;
 	}
 }
 

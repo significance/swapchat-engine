@@ -24,6 +24,17 @@ export interface KeyPair {
 	publicKey: PublicKey;
 }
 
+export interface MlKemEncapsulationKey extends Uint8Array {}
+
+export interface MlKemDecapsulationKey extends Uint8Array {}
+
+export interface MlKemCiphertext extends Uint8Array {}
+
+export interface MlKemKeyPair {
+	encapsulationKey: MlKemEncapsulationKey;
+	decapsulationKey: MlKemDecapsulationKey;
+}
+
 // swarm
 
 export type SwarmType<T> = new (...args: any[]) => T;

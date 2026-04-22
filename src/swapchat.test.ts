@@ -1,5 +1,4 @@
 import SwapChat from "./swapchat";
-import { PublicKey } from "./types";
 import { Message } from "./types";
 
 const apiURL = process.env.BEE_API_URL || "http://localhost:1633";
@@ -8,8 +7,8 @@ const STAMP_ID = process.env.BEE_STAMP_ID || "";
 const initiatorDidRecieve = console.log;
 const respondentDidRecieve = console.log;
 
-const TOKEN_LENGTH = 194;
-const RESTORE_TOKEN_LENGTH = 428;
+const TOKEN_LENGTH = 2562;
+const RESTORE_TOKEN_LENGTH = 492;
 const POLL_TIME = 1000;
 
 jest.setTimeout(60000);
@@ -65,7 +64,7 @@ test("session is initiated", async () => {
 
   expect(sessionA.SharedKeyPair).toStrictEqual(sessionB.SharedKeyPair);
 
-  const responsePayload = sessionB.getRespondentHandshakePayload() as PublicKey;
+  const responsePayload = sessionB.getRespondentHandshakePayload();
 
   sessionA.parseRespondentHandshakePayload(responsePayload);
 
