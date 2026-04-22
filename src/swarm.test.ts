@@ -2,8 +2,10 @@ import Swarm from "./swarm";
 
 import Crypto from "./crypto";
 
-const apiURL = "http://localhost:1633";
-const debugURL = "http://localhost:1635";
+const apiURL = process.env.BEE_API_URL || "http://localhost:1633";
+const STAMP_ID = process.env.BEE_STAMP_ID || "";
+
+jest.setTimeout(120000);
 
 let senderAddress: any, data: any;
 
@@ -14,8 +16,13 @@ test("uploads SOC to random index", async () => {
 
   senderAddress = keyPair.address;
 
-  const swarm = new Swarm(apiURL, debugURL);
-  await swarm.buyStamp();
+  const swarm = new Swarm(apiURL);
+
+  if (STAMP_ID) {
+    await swarm.useStamp(STAMP_ID);
+  } else {
+    await swarm.buyStamp();
+  }
 
   data = new Uint8Array([1, 2, 3]);
 
@@ -23,9 +30,9 @@ test("uploads SOC to random index", async () => {
 });
 
 test("downloads SOC from random index", async () => {
-  const swarm = new Swarm(apiURL, debugURL);
+  const swarm = new Swarm(apiURL);
 
   let response = await swarm.readSOC(senderAddress, index);
 
-  expect(response.payload()).toStrictEqual(data);
+  expect(response.payload.toUint8Array()).toStrictEqual(data);
 });

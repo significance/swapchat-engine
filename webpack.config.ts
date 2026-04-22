@@ -16,6 +16,7 @@ const config: Configuration = {
 								"@babel/preset-env",
 								{
 									useBuiltIns: "usage",
+									corejs: 3,
 								},
 							],
 							"@babel/preset-typescript",
@@ -30,6 +31,7 @@ const config: Configuration = {
 		alias: {
 			// replace native `scrypt` module with pure js `js-scrypt`
 			scrypt: "js-scrypt",
+			"process/browser": require.resolve("process/browser"),
 		},
 		fallback: {
 			crypto: require.resolve("crypto-browserify"),
@@ -47,7 +49,7 @@ const config: Configuration = {
 	},
 	plugins: [
 		new ProvidePlugin({
-			process: "process/browser.js",
+			process: "process/browser",
 			Buffer: ["buffer", "Buffer"],
 		}),
 	],

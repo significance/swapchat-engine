@@ -1,7 +1,9 @@
 import Swarm from "./swarm";
 import crypto from "./crypto";
 
-import { Utils } from "@ethersphere/bee-js";
+function hexToBytes(hex: string): Buffer {
+	return Buffer.from(hex, "hex");
+}
 
 import {
 	KeyPair,
@@ -45,12 +47,11 @@ class SwapChat {
 
 	constructor(
 		apiURL: string,
-		debugURL: string,
 		didReceiveCallback: object,
 		gatewayMode: boolean,
 		pollMilliseconds: number
 	) {
-		this.Swarm = new Swarm(apiURL, debugURL);
+		this.Swarm = new Swarm(apiURL);
 		this.DidReceiveCallback = didReceiveCallback;
 		this.SecretCode = undefined;
 		this.SharedSecret = undefined;
@@ -225,14 +226,14 @@ class SwapChat {
 		}
 
 		const OwnKeyPair = {
-			address: Utils.hexToBytes(ownAddressHex) as Address,
-			privateKey: Utils.hexToBytes(ownPrivateKeyHex) as PrivateKey,
-			publicKey: Utils.hexToBytes(ownPublicKeyHex) as PublicKey,
+			address: hexToBytes(ownAddressHex) as Address,
+			privateKey: hexToBytes(ownPrivateKeyHex) as PrivateKey,
+			publicKey: hexToBytes(ownPublicKeyHex) as PublicKey,
 		};
 
 		this.OwnKeyPair = OwnKeyPair;
 
-		const otherPartyPublicKey = Utils.hexToBytes(
+		const otherPartyPublicKey = hexToBytes(
 			otherPartyPublicKeyHex
 		) as PublicKey;
 
@@ -252,11 +253,11 @@ class SwapChat {
 		this.SharedKeyPair = crypto.generateKeyPair();
 		this.OwnKeyPair = crypto.generateKeyPair();
 
-		if (this.GatewayMode === false) {
+		if (this.BatchID !== undefined) {
+			await this.Swarm.useStamp(this.BatchID);
+		} else if (this.GatewayMode === false) {
 			this.BatchID = await this.Swarm.buyStamp();
-		}
-
-		if (this.GatewayMode === true) {
+		} else {
 			this.BatchID = this.Swarm.zeroStamp();
 		}
 
@@ -291,11 +292,11 @@ class SwapChat {
 		this.OwnKeyPair = crypto.generateKeyPair();
 		this.parseToken(token);
 
-		if (this.GatewayMode === false) {
+		if (this.BatchID !== undefined) {
+			await this.Swarm.useStamp(this.BatchID);
+		} else if (this.GatewayMode === false) {
 			this.BatchID = await this.Swarm.buyStamp();
-		}
-
-		if (this.GatewayMode === true) {
+		} else {
 			this.BatchID = this.Swarm.zeroStamp();
 		}
 
@@ -319,11 +320,11 @@ class SwapChat {
 			PRIVATE_KEY_LENGTH + PUBLIC_KEY_LENGTH
 		);
 
-		const sharedPrivateKey = Utils.hexToBytes(
+		const sharedPrivateKey = hexToBytes(
 			sharedPrivateKeyHex
 		) as PrivateKey;
 
-		const respondentPublicKey = Utils.hexToBytes(
+		const respondentPublicKey = hexToBytes(
 			respondentPublicKeyHex
 		) as PublicKey;
 
@@ -383,7 +384,9 @@ class SwapChat {
 
 		await this.sendInitiatorHandshakeChunk();
 
-		this.parseRespondentHandshakePayload(response.payload());
+		this.parseRespondentHandshakePayload(
+			Buffer.from(response.payload.toUint8Array())
+		);
 
 		this.IsPollingForMessages = true;
 		this.setReceiveLoop();
@@ -522,6 +525,7 @@ class SwapChat {
 
 	decryptPayload(payloadBuffer: Buffer, secret: Secret, iv: number): Message {
 		const ivBuffer = crypto.ivFromUint(iv);
+
 		const decryptedBuffer = crypto.decryptBuffer(
 			payloadBuffer,
 			secret,
@@ -538,7 +542,7 @@ class SwapChat {
 				return;
 			}
 			try {
-				this.receive();
+				await this.receive();
 			} catch (e) {
 				return;
 			}
@@ -568,7 +572,7 @@ class SwapChat {
 		}
 
 		const payload = this.decryptPayload(
-			response.payload(),
+			Buffer.from(response.payload.toUint8Array()),
 			this.SharedSecret,
 			this.OwnCurrentIndex
 		);
@@ -591,9 +595,12 @@ class SwapChat {
 				return;
 			}
 			try {
-				this.restoreConversation();
+				const found = await this.restoreConversation();
+				if (!found) {
+					this.IsPollingForRestoreMessages = false;
+					return;
+				}
 			} catch (e) {
-				//assume if not found it doesn't exist (timeout and retries need to be added perhaps)
 				this.IsPollingForRestoreMessages = false;
 				return;
 			}
@@ -620,7 +627,7 @@ class SwapChat {
 		}
 
 		const payload = this.decryptPayload(
-			response.payload(),
+			Buffer.from(response.payload.toUint8Array()),
 			this.SharedSecret,
 			this.OtherPartyCurrentIndex
 		);

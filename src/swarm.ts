@@ -1,20 +1,16 @@
-import { Bee, BeeDebug, Utils } from "@ethersphere/bee-js";
+import { Bee, Identifier, EthAddress } from "@ethersphere/bee-js";
 
-import { Bytes, KeyPair } from "./types";
-
-// import { makeBytes } from "./utils";
+import { KeyPair } from "./types";
 
 const SOC_READ_TIMEOUT = 1000;
 
 class Swarm {
 	public Bee;
-	public BeeDebug;
 	public KeyPair: KeyPair | undefined;
 	public BatchID: any;
 
-	constructor(apiURL: string, debugURL: string) {
+	constructor(apiURL: string) {
 		this.Bee = new Bee(apiURL);
-		this.BeeDebug = new BeeDebug(debugURL);
 	}
 
 	async useStamp(postageBatchId: string) {
@@ -24,9 +20,9 @@ class Swarm {
 	}
 
 	async buyStamp() {
-		const postageBatchId = await this.BeeDebug.createPostageBatch(
-			"100",
-			17
+		const postageBatchId = await this.Bee.createPostageBatch(
+			"1000000000",
+			20
 		);
 		this.BatchID = postageBatchId;
 
@@ -40,38 +36,43 @@ class Swarm {
 		return this.BatchID;
 	}
 
-	async writeSOC(keyPair: KeyPair, index: number, data: any) {
-		const topic = Buffer.alloc(32);
-		topic.writeUInt16LE(index, 0);
+	makeIdentifier(index: number): Identifier {
+		const topic = new Uint8Array(32);
+		topic[0] = index & 0xff;
+		topic[1] = (index >> 8) & 0xff;
+		return new Identifier(topic);
+	}
 
+	async writeSOC(keyPair: KeyPair, index: number, data: any) {
 		if (keyPair === undefined) {
 			throw new Error("can only write if keypair was defined");
 		}
 
-		let socWriter = this.Bee.makeSOCWriter(keyPair.privateKey);
+		const identifier = this.makeIdentifier(index);
+		const cac = this.Bee.makeContentAddressedChunk(new Uint8Array(data));
+		const soc = cac.toSingleOwnerChunk(identifier, keyPair.privateKey);
 
-		//what is the desired way to deal with this? :D
-		type Identifier = Bytes<32>;
-		const topicBytes: Identifier = Utils.hexToBytes(topic.toString("hex"));
+		await this.Bee.uploadChunk(this.BatchID, soc);
 
-		return await socWriter.upload(this.BatchID, topicBytes, data);
+		return soc.address;
 	}
 
 	async readSOC(address: any, index: number) {
-		let socReader = this.Bee.makeSOCReader(address, {
-			timeout: SOC_READ_TIMEOUT,
+		const identifier = this.makeIdentifier(index);
+		const ownerAddress = new EthAddress(Buffer.from(address));
+
+		const socAddress = this.Bee.calculateSingleOwnerChunkAddress(
+			identifier,
+			ownerAddress
+		);
+
+		const data = await this.Bee.downloadChunk(socAddress, {
+			timeoutMs: SOC_READ_TIMEOUT,
 		});
 
-		const topic = Buffer.alloc(32);
-		topic.writeUInt16LE(index, 0);
+		const soc = this.Bee.unmarshalSingleOwnerChunk(data, socAddress);
 
-		//what is the desired way to deal with this? :D
-		type Identifier = Bytes<32>;
-		const topicBytes: Identifier = Utils.hexToBytes(topic.toString("hex"));
-
-		let response = await socReader.download(topicBytes);
-
-		return response;
+		return soc;
 	}
 }
 
