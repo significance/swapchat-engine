@@ -7,7 +7,7 @@ const STAMP_ID = process.env.BEE_STAMP_ID || "";
 const initiatorDidRecieve = console.log;
 const respondentDidRecieve = console.log;
 
-const TOKEN_LENGTH = 2562;
+const TOKEN_LENGTH = 1708;
 const RESTORE_TOKEN_LENGTH = 492;
 const POLL_TIME = 1000;
 

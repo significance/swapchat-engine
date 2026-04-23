@@ -18,14 +18,22 @@ import {
 	MlKemCiphertext,
 } from "./types";
 
-const PUBLIC_KEY_LENGTH = 130;
-const PRIVATE_KEY_LENGTH = 64;
-const ADDRESS_LENGTH = 40;
-const STAMP_LENGTH = 64;
-const MLKEM_ENCAP_KEY_HEX_LENGTH = 2368; // 1184 bytes
-const MLKEM_CIPHERTEXT_LENGTH = 1088; // bytes
-const SECP256K1_PUBKEY_LENGTH = 65; // bytes
-const SHARED_SECRET_HEX_LENGTH = 64; // 32 bytes
+// Byte lengths for token fields
+const PRIVATE_KEY_BYTES = 32;
+const PUBLIC_KEY_BYTES = 65;
+const STAMP_HEX_LENGTH = 64;
+const MLKEM_ENCAP_KEY_BYTES = 1184;
+const MLKEM_CIPHERTEXT_BYTES = 1088;
+
+// Token: sharedPrivKey(32) + initiatorPubKey(65) + mlkemEncapKey(1184) = 1281 bytes
+const TOKEN_BYTES = PRIVATE_KEY_BYTES + PUBLIC_KEY_BYTES + MLKEM_ENCAP_KEY_BYTES;
+
+// Restoration token is hex-encoded:
+// addr(40) + pub(130) + priv(64) + otherPub(130) + secret(64) + stamp(64) = 492
+const ADDRESS_HEX_LENGTH = 40;
+const PUBLIC_KEY_HEX_LENGTH = 130;
+const PRIVATE_KEY_HEX_LENGTH = 64;
+const SHARED_SECRET_HEX_LENGTH = 64;
 
 const sleep = (delay: number) =>
 	new Promise((resolve) => setTimeout(resolve, delay));
@@ -145,12 +153,12 @@ class SwapChat {
 
 	parseRestorationToken(token: string) {
 		const tokenLength =
-			ADDRESS_LENGTH +
-			PUBLIC_KEY_LENGTH +
-			PRIVATE_KEY_LENGTH +
-			PUBLIC_KEY_LENGTH +
+			ADDRESS_HEX_LENGTH +
+			PUBLIC_KEY_HEX_LENGTH +
+			PRIVATE_KEY_HEX_LENGTH +
+			PUBLIC_KEY_HEX_LENGTH +
 			SHARED_SECRET_HEX_LENGTH +
-			STAMP_LENGTH;
+			STAMP_HEX_LENGTH;
 
 		if (token.length !== tokenLength) {
 			throw new Error(
@@ -159,17 +167,17 @@ class SwapChat {
 		}
 
 		let offset = 0;
-		const ownAddressHex = token.substr(offset, ADDRESS_LENGTH);
-		offset += ADDRESS_LENGTH;
-		const ownPublicKeyHex = token.substr(offset, PUBLIC_KEY_LENGTH);
-		offset += PUBLIC_KEY_LENGTH;
-		const ownPrivateKeyHex = token.substr(offset, PRIVATE_KEY_LENGTH);
-		offset += PRIVATE_KEY_LENGTH;
-		const otherPartyPublicKeyHex = token.substr(offset, PUBLIC_KEY_LENGTH);
-		offset += PUBLIC_KEY_LENGTH;
+		const ownAddressHex = token.substr(offset, ADDRESS_HEX_LENGTH);
+		offset += ADDRESS_HEX_LENGTH;
+		const ownPublicKeyHex = token.substr(offset, PUBLIC_KEY_HEX_LENGTH);
+		offset += PUBLIC_KEY_HEX_LENGTH;
+		const ownPrivateKeyHex = token.substr(offset, PRIVATE_KEY_HEX_LENGTH);
+		offset += PRIVATE_KEY_HEX_LENGTH;
+		const otherPartyPublicKeyHex = token.substr(offset, PUBLIC_KEY_HEX_LENGTH);
+		offset += PUBLIC_KEY_HEX_LENGTH;
 		const sharedSecretHex = token.substr(offset, SHARED_SECRET_HEX_LENGTH);
 		offset += SHARED_SECRET_HEX_LENGTH;
-		const stampHex = token.substr(offset, STAMP_LENGTH);
+		const stampHex = token.substr(offset, STAMP_HEX_LENGTH);
 
 		this.OwnKeyPair = {
 			address: hexToBytes(ownAddressHex) as Address,
@@ -218,31 +226,18 @@ class SwapChat {
 			throw new Error("Could not find ML-KEM key pair");
 		}
 
-		const privateKeyHex = this.SharedKeyPair.privateKey.toString("hex");
-		const publicKeyHex = this.OwnKeyPair.publicKey.toString("hex");
-		const mlkemEncapKeyHex = Buffer.from(
-			this.MlKemKeyPair.encapsulationKey
-		).toString("hex");
+		const tokenBuffer = Buffer.alloc(TOKEN_BYTES);
+		let offset = 0;
 
-		if (privateKeyHex.length !== PRIVATE_KEY_LENGTH) {
-			throw new Error(
-				`privateKeyHex must be ${PRIVATE_KEY_LENGTH} characters long, is ${privateKeyHex.length}`
-			);
-		}
+		Buffer.from(this.SharedKeyPair.privateKey).copy(tokenBuffer, offset);
+		offset += PRIVATE_KEY_BYTES;
 
-		if (publicKeyHex.length !== PUBLIC_KEY_LENGTH) {
-			throw new Error(
-				`publicKeyHex must be ${PUBLIC_KEY_LENGTH} characters long`
-			);
-		}
+		Buffer.from(this.OwnKeyPair.publicKey).copy(tokenBuffer, offset);
+		offset += PUBLIC_KEY_BYTES;
 
-		if (mlkemEncapKeyHex.length !== MLKEM_ENCAP_KEY_HEX_LENGTH) {
-			throw new Error(
-				`mlkemEncapKeyHex must be ${MLKEM_ENCAP_KEY_HEX_LENGTH} characters long, is ${mlkemEncapKeyHex.length}`
-			);
-		}
+		Buffer.from(this.MlKemKeyPair.encapsulationKey).copy(tokenBuffer, offset);
 
-		return privateKeyHex + publicKeyHex + mlkemEncapKeyHex;
+		return tokenBuffer.toString("base64url");
 	}
 
 	async respond(token: string) {
@@ -264,28 +259,30 @@ class SwapChat {
 	}
 
 	parseToken(token: string): void {
-		const expectedLength =
-			PRIVATE_KEY_LENGTH + PUBLIC_KEY_LENGTH + MLKEM_ENCAP_KEY_HEX_LENGTH;
+		const tokenBuffer = Buffer.from(token, "base64url");
 
-		if (token.length !== expectedLength) {
+		if (tokenBuffer.length !== TOKEN_BYTES) {
 			throw new Error(
-				`token must be ${expectedLength} characters long, is ${token.length}`
+				`token must decode to ${TOKEN_BYTES} bytes, got ${tokenBuffer.length}`
 			);
 		}
 
-		const sharedPrivateKeyHex = token.substr(0, PRIVATE_KEY_LENGTH);
-		const respondentPublicKeyHex = token.substr(
-			PRIVATE_KEY_LENGTH,
-			PUBLIC_KEY_LENGTH
-		);
-		const mlkemEncapKeyHex = token.substr(
-			PRIVATE_KEY_LENGTH + PUBLIC_KEY_LENGTH,
-			MLKEM_ENCAP_KEY_HEX_LENGTH
-		);
+		let offset = 0;
+		const sharedPrivateKey = tokenBuffer.subarray(
+			offset,
+			offset + PRIVATE_KEY_BYTES
+		) as PrivateKey;
+		offset += PRIVATE_KEY_BYTES;
 
-		const sharedPrivateKey = hexToBytes(sharedPrivateKeyHex) as PrivateKey;
-		const respondentPublicKey = hexToBytes(respondentPublicKeyHex) as PublicKey;
-		const mlkemEncapKey = new Uint8Array(hexToBytes(mlkemEncapKeyHex));
+		const respondentPublicKey = tokenBuffer.subarray(
+			offset,
+			offset + PUBLIC_KEY_BYTES
+		) as PublicKey;
+		offset += PUBLIC_KEY_BYTES;
+
+		const mlkemEncapKey = new Uint8Array(
+			tokenBuffer.subarray(offset, offset + MLKEM_ENCAP_KEY_BYTES)
+		);
 
 		this.OtherPartyPublicKey = respondentPublicKey;
 
@@ -325,10 +322,10 @@ class SwapChat {
 		}
 		// Concatenate secp256k1 public key (65 bytes) + ML-KEM ciphertext (1088 bytes)
 		const payload = new Uint8Array(
-			SECP256K1_PUBKEY_LENGTH + MLKEM_CIPHERTEXT_LENGTH
+			PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES
 		);
 		payload.set(this.OwnKeyPair.publicKey, 0);
-		payload.set(this.MlKemCiphertext, SECP256K1_PUBKEY_LENGTH);
+		payload.set(this.MlKemCiphertext, PUBLIC_KEY_BYTES);
 		return payload;
 	}
 
@@ -409,19 +406,19 @@ class SwapChat {
 			throw new Error("could not find ML-KEM key pair");
 		}
 
-		if (payload.length !== SECP256K1_PUBKEY_LENGTH + MLKEM_CIPHERTEXT_LENGTH) {
+		if (payload.length !== PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES) {
 			throw new Error(
 				`handshake payload must be ${
-					SECP256K1_PUBKEY_LENGTH + MLKEM_CIPHERTEXT_LENGTH
+					PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES
 				} bytes, is ${payload.length}`
 			);
 		}
 
 		const respondentPublicKey = Buffer.from(
-			payload.slice(0, SECP256K1_PUBKEY_LENGTH)
+			payload.slice(0, PUBLIC_KEY_BYTES)
 		) as PublicKey;
 		const mlkemCiphertext = payload.slice(
-			SECP256K1_PUBKEY_LENGTH
+			PUBLIC_KEY_BYTES
 		) as MlKemCiphertext;
 
 		// Hybrid key exchange: ECDH + ML-KEM
