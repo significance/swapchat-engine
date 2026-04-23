@@ -5,6 +5,16 @@ function hexToBytes(hex: string): Buffer {
 	return Buffer.from(hex, "hex");
 }
 
+function toBase64Url(buf: Buffer): string {
+	return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromBase64Url(str: string): Buffer {
+	let b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+	while (b64.length % 4) b64 += "=";
+	return Buffer.from(b64, "base64");
+}
+
 import {
 	KeyPair,
 	Secret,
@@ -237,7 +247,7 @@ class SwapChat {
 
 		Buffer.from(this.MlKemKeyPair.encapsulationKey).copy(tokenBuffer, offset);
 
-		return tokenBuffer.toString("base64url");
+		return toBase64Url(tokenBuffer);
 	}
 
 	async respond(token: string) {
@@ -259,7 +269,7 @@ class SwapChat {
 	}
 
 	parseToken(token: string): void {
-		const tokenBuffer = Buffer.from(token, "base64url");
+		const tokenBuffer = fromBase64Url(token);
 
 		if (tokenBuffer.length !== TOKEN_BYTES) {
 			throw new Error(

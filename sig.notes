@@ -1,0 +1,1 @@
+2026-04-23: SSH server at 142.132.214.211 needs OpenSSH upgrade for post-quantum key exchange. Currently warns "not using a post-quantum key exchange algorithm" on every connection. Ironic given we just implemented ML-KEM in the chat engine it's tunnelling.
