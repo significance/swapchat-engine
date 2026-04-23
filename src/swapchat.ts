@@ -70,6 +70,8 @@ class SwapChat {
 	public PollMilliseconds: number = 5000;
 	public MlKemKeyPair: undefined | MlKemKeyPair;
 	public MlKemCiphertext: undefined | MlKemCiphertext;
+	public SignerKey: undefined | string;
+	public StampDepth: number = 20;
 
 	constructor(
 		apiURL: string,
@@ -87,10 +89,18 @@ class SwapChat {
 		this.PollMilliseconds = pollMilliseconds;
 	}
 
+	private setupStamp() {
+		if (this.SignerKey && this.BatchID) {
+			this.Swarm.useClientStamp(this.SignerKey, this.BatchID, this.StampDepth);
+		}
+	}
+
 	async restore() {
 		let stamp = this.BatchID;
 
-		if (this.GatewayMode === false) {
+		if (this.SignerKey && stamp) {
+			this.setupStamp();
+		} else if (this.GatewayMode === false) {
 			if (stamp === undefined) {
 				throw new Error("must provide a stamp");
 			}
@@ -216,7 +226,9 @@ class SwapChat {
 		this.OwnKeyPair = crypto.generateKeyPair();
 		this.MlKemKeyPair = crypto.generateMlKemKeyPair();
 
-		if (this.BatchID !== undefined) {
+		if (this.SignerKey && this.BatchID) {
+			this.setupStamp();
+		} else if (this.BatchID !== undefined) {
 			await this.Swarm.useStamp(this.BatchID);
 		} else if (this.GatewayMode === false) {
 			this.BatchID = await this.Swarm.buyStamp();
@@ -255,7 +267,9 @@ class SwapChat {
 		this.OwnKeyPair = crypto.generateKeyPair();
 		this.parseToken(token);
 
-		if (this.BatchID !== undefined) {
+		if (this.SignerKey && this.BatchID) {
+			this.setupStamp();
+		} else if (this.BatchID !== undefined) {
 			await this.Swarm.useStamp(this.BatchID);
 		} else if (this.GatewayMode === false) {
 			this.BatchID = await this.Swarm.buyStamp();

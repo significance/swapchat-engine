@@ -1,4 +1,4 @@
-import { Bee, Identifier, EthAddress } from "@ethersphere/bee-js";
+import { Bee, Identifier, EthAddress, Stamper } from "@ethersphere/bee-js";
 
 import { KeyPair } from "./types";
 
@@ -8,9 +8,15 @@ class Swarm {
 	public Bee;
 	public KeyPair: KeyPair | undefined;
 	public BatchID: any;
+	public ClientStamper: Stamper | undefined;
 
 	constructor(apiURL: string) {
 		this.Bee = new Bee(apiURL);
+	}
+
+	useClientStamp(signerKeyHex: string, batchId: string, depth: number) {
+		this.ClientStamper = Stamper.fromBlank(signerKeyHex, batchId, depth);
+		this.BatchID = batchId;
 	}
 
 	async useStamp(postageBatchId: string) {
@@ -52,7 +58,15 @@ class Swarm {
 		const cac = this.Bee.makeContentAddressedChunk(new Uint8Array(data));
 		const soc = cac.toSingleOwnerChunk(identifier, keyPair.privateKey);
 
-		await this.Bee.uploadChunk(this.BatchID, soc);
+		if (this.ClientStamper) {
+			const chunkWithHash = Object.assign({}, soc, {
+				hash: () => soc.address.toUint8Array(),
+			});
+			const envelope = this.ClientStamper.stamp(chunkWithHash as any);
+			await this.Bee.uploadChunk(envelope, soc);
+		} else {
+			await this.Bee.uploadChunk(this.BatchID, soc);
+		}
 
 		return soc.address;
 	}

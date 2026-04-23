@@ -66,19 +66,47 @@ nvm use
 npm install
 ```
 
+### Stamping
+
+Two modes are supported:
+
+**Server-side stamping** (default): pass a batch ID and the bee node signs the stamp. The batch must be owned by the node's wallet.
+
+**Client-side stamping**: pass a signer key (the batch owner's private key) and stamp chunks locally in JavaScript. The bee node doesn't need to know the key. Set `SignerKey` and `BatchID` on the session before calling `initiate()` / `respond()`.
+
+To buy a stamp for client-side use, fund an address with BZZ + xDAI on Gnosis Chain, then:
+
+```
+BEE_SIGNER_KEY=<hex-private-key> ./scripts/buy-stamp.sh
+```
+
+This calls the [PostageStamp contract](https://github.com/ethersphere/storage-incentives) via `cast` (Foundry).
+
 ### Running tests
 
 Requires a running Bee node.
 
-```
+```bash
+# Server-side stamping only
 BEE_API_URL=http://localhost:1633 \
-BEE_STAMP_ID=<your-stamp-id> \
+BEE_STAMP_ID=<node-owned-stamp> \
+npx jest --forceExit
+
+# With client-side stamping tests
+BEE_API_URL=http://localhost:1633 \
+BEE_STAMP_ID=<node-owned-stamp> \
+BEE_SIGNER_KEY=<hex-private-key> \
+BEE_CLIENT_STAMP_ID=<signer-owned-stamp> \
+BEE_STAMP_DEPTH=20 \
 npx jest --forceExit
 ```
 
 Environment variables:
 - `BEE_API_URL` — Bee node API URL (default: `http://localhost:1633`)
-- `BEE_STAMP_ID` — Pre-bought postage stamp batch ID (skips buying a new stamp per test run)
+- `BEE_STAMP_ID` — Node-owned stamp batch ID (server-side stamping)
+- `BEE_SIGNER_KEY` — Hex private key of the batch owner (client-side stamping)
+- `BEE_CLIENT_STAMP_ID` — Signer-owned stamp batch ID (client-side stamping)
+- `BEE_STAMP_DEPTH` — Batch depth (default: `20`)
 
 ### Build
 

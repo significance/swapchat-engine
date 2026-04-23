@@ -3,6 +3,9 @@ import { Message } from "./types";
 
 const apiURL = process.env.BEE_API_URL || "http://localhost:1633";
 const STAMP_ID = process.env.BEE_STAMP_ID || "";
+const SIGNER_KEY = process.env.BEE_SIGNER_KEY || "";
+const CLIENT_STAMP_ID = process.env.BEE_CLIENT_STAMP_ID || "";
+const STAMP_DEPTH = parseInt(process.env.BEE_STAMP_DEPTH || "20");
 
 const initiatorDidRecieve = console.log;
 const respondentDidRecieve = console.log;
@@ -15,7 +18,11 @@ jest.setTimeout(60000);
 
 function makeSession(callback: any): SwapChat {
   const s = new SwapChat(apiURL, callback, false, POLL_TIME);
-  if (STAMP_ID) {
+  if (SIGNER_KEY && CLIENT_STAMP_ID) {
+    s.BatchID = CLIENT_STAMP_ID;
+    s.SignerKey = SIGNER_KEY;
+    s.StampDepth = STAMP_DEPTH;
+  } else if (STAMP_ID) {
     s.BatchID = STAMP_ID;
   }
   return s;
