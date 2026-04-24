@@ -78,6 +78,7 @@ class SwapChat {
 	public MlKemCiphertext: undefined | MlKemCiphertext;
 	public SignerKey: undefined | string;
 	public StampDepth: number = 20;
+	public StampBuckets: Uint32Array | undefined;
 	public BookOfStamps: Map<number, any> = new Map();
 	public HandshakeStamp: undefined | Uint8Array; // marshalled 113-byte stamp
 
@@ -99,7 +100,12 @@ class SwapChat {
 
 	private setupStamp() {
 		if (this.SignerKey && this.BatchID) {
-			this.Swarm.useClientStamp(this.SignerKey, this.BatchID, this.StampDepth);
+			this.Swarm.useClientStamp(
+				this.SignerKey,
+				this.BatchID,
+				this.StampDepth,
+				this.StampBuckets
+			);
 		}
 	}
 

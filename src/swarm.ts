@@ -21,9 +21,27 @@ class Swarm {
 		this.Bee = new Bee(apiURL);
 	}
 
-	useClientStamp(signerKeyHex: string, batchId: string, depth: number) {
-		this.ClientStamper = Stamper.fromBlank(signerKeyHex, batchId, depth);
+	useClientStamp(
+		signerKeyHex: string,
+		batchId: string,
+		depth: number,
+		buckets?: Uint32Array
+	) {
+		if (buckets) {
+			this.ClientStamper = Stamper.fromState(
+				signerKeyHex,
+				batchId,
+				buckets,
+				depth
+			);
+		} else {
+			this.ClientStamper = Stamper.fromBlank(signerKeyHex, batchId, depth);
+		}
 		this.BatchID = batchId;
+	}
+
+	getStampState(): Uint32Array | undefined {
+		return this.ClientStamper?.getState();
 	}
 
 	async useStamp(postageBatchId: string) {

@@ -7,7 +7,6 @@ const STAMP_ID = process.env.BEE_STAMP_ID || "";
 const SIGNER_KEY = process.env.BEE_SIGNER_KEY || "";
 const CLIENT_STAMP_ID = process.env.BEE_CLIENT_STAMP_ID || "";
 const STAMP_DEPTH = parseInt(process.env.BEE_STAMP_DEPTH || "20");
-
 jest.setTimeout(120000);
 
 let senderAddress: any, data: any;
