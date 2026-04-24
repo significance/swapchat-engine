@@ -105,10 +105,13 @@ class SwapChat {
 
 	async restore() {
 		let stamp = this.BatchID;
+		const isZeroStamp =
+			stamp ===
+			"0000000000000000000000000000000000000000000000000000000000000000";
 
-		if (this.SignerKey && stamp) {
+		if (this.SignerKey && stamp && !isZeroStamp) {
 			this.setupStamp();
-		} else if (this.GatewayMode === false) {
+		} else if (!isZeroStamp && this.GatewayMode === false) {
 			if (stamp === undefined) {
 				throw new Error("must provide a stamp");
 			}
@@ -136,6 +139,11 @@ class SwapChat {
 		this.OtherPartyAddress = crypto.publicKeyToAddress(
 			this.OtherPartyPublicKey
 		);
+
+		// Re-read book of stamps if available
+		if (isZeroStamp && this.SharedKeyPair) {
+			await this.readBookOfStamps();
+		}
 
 		this.IsPollingForMessages = true;
 		this.setReceiveLoop();
@@ -167,12 +175,17 @@ class SwapChat {
 		).toString("hex");
 		const sharedSecretHex = Buffer.from(this.SharedSecret).toString("hex");
 
+		const sharedAddressHex = this.SharedKeyPair
+			? this.SharedKeyPair.address.toString("hex")
+			: "0000000000000000000000000000000000000000";
+
 		return (
 			ownAddressHex +
 			ownPublicKeyHex +
 			ownPrivateKeyHex +
 			otherPartyPublicKeyHex +
 			sharedSecretHex +
+			sharedAddressHex +
 			stampHex
 		);
 	}
@@ -184,6 +197,7 @@ class SwapChat {
 			PRIVATE_KEY_HEX_LENGTH +
 			PUBLIC_KEY_HEX_LENGTH +
 			SHARED_SECRET_HEX_LENGTH +
+			ADDRESS_HEX_LENGTH +
 			STAMP_HEX_LENGTH;
 
 		if (token.length !== tokenLength) {
@@ -203,6 +217,8 @@ class SwapChat {
 		offset += PUBLIC_KEY_HEX_LENGTH;
 		const sharedSecretHex = token.substr(offset, SHARED_SECRET_HEX_LENGTH);
 		offset += SHARED_SECRET_HEX_LENGTH;
+		const sharedAddressHex = token.substr(offset, ADDRESS_HEX_LENGTH);
+		offset += ADDRESS_HEX_LENGTH;
 		const stampHex = token.substr(offset, STAMP_HEX_LENGTH);
 
 		this.OwnKeyPair = {
@@ -216,6 +232,15 @@ class SwapChat {
 		) as PublicKey;
 
 		this.SharedSecret = hexToBytes(sharedSecretHex) as Secret;
+
+		// Restore SharedKeyPair address for book of stamps re-read
+		const sharedAddr = hexToBytes(sharedAddressHex);
+		const hasSharedAddr = sharedAddr.some((b: number) => b !== 0);
+		if (hasSharedAddr) {
+			this.SharedKeyPair = {
+				address: sharedAddr as Address,
+			} as KeyPair;
+		}
 
 		this.BatchID = stampHex;
 	}
