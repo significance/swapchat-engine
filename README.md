@@ -1,22 +1,143 @@
-### Swapchat Engine
+# Swapchat Engine
 
-Decentralized E2E encrypted chat on Ethereum Swarm using Single Owner Chunks (SOCs).
+Decentralized E2E encrypted chat on Ethereum Swarm. Messages stored as Single Owner Chunks (SOCs), constructed and signed client-side. Post-quantum hybrid key exchange. Zero-BZZ onboarding for respondents.
 
-Implementing [swapchat protocol pre-release 1.0](./swapchat-protocol.txt) (credits @agazo & @nolash)
+## API
 
-SOCs are constructed and signed client-side in JavaScript, then uploaded as raw chunks via `POST /chunks`. No dependency on the bee node's signer.
+### Quick start
+
+```typescript
+import SwapChat from "swapchat";
+
+// Alice creates a session
+const alice = new SwapChat("http://localhost:1633", onMessage, false, 5000);
+alice.BatchID = "<stamp-id>";         // or use SignerKey for client-side stamping
+await alice.initiate();
+const token = alice.getToken();       // share this with Bob (base64url, ~1859 chars)
+
+// Bob joins
+const bob = new SwapChat("http://localhost:1633", onMessage, false, 5000);
+bob.BatchID = "<stamp-id>";           // not needed if Alice uses client-side stamping
+await bob.respond(token);
+
+// Complete handshake
+await alice.waitForRespondentHandshakeChunk();
+await bob.waitForInitiatorHandshakeChunk();
+
+// Chat
+await alice.send("hello");
+await bob.send("hey!");
+
+// Messages arrive via callback
+function onMessage(msg) {
+  console.log(msg.content, msg.timestamp);
+}
+```
+
+### Constructor
+
+```typescript
+new SwapChat(apiURL, didReceiveCallback, gatewayMode, pollMilliseconds)
+```
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `apiURL` | `string` | Bee node API URL |
+| `didReceiveCallback` | `(msg: Message) => void` | Called when a message is received |
+| `gatewayMode` | `boolean` | Use zero stamp (gateway nodes) |
+| `pollMilliseconds` | `number` | Polling interval for new messages |
+
+### Properties (set before `initiate`/`respond`)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `BatchID` | `string` | Postage stamp batch ID |
+| `SignerKey` | `string` | Hex private key for client-side stamping |
+| `StampDepth` | `number` | Batch depth (default: 20) |
+| `StampBuckets` | `Uint32Array` | Restored stamp state (from `getStampState()`) |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `initiate()` | `Promise<this>` | Start a new chat session as initiator |
+| `getToken()` | `string` | Get base64url token to share with respondent |
+| `respond(token)` | `Promise<this>` | Join a session using a token |
+| `waitForRespondentHandshakeChunk()` | `Promise<void>` | Initiator: poll until respondent completes handshake |
+| `waitForInitiatorHandshakeChunk()` | `Promise<void>` | Respondent: poll until initiator sends ACK |
+| `send(message)` | `Promise<boolean>` | Send an encrypted message |
+| `close()` | `void` | Stop polling |
+| `getRestorationToken()` | `string` | Get hex token for session persistence |
+| `restoreFromToken(token)` | `this` | Restore a session from a restoration token |
+
+### Message format
+
+```typescript
+interface Message {
+  index: number;
+  content: string;
+  timestamp: number;
+}
+```
+
+### Stamp state persistence
+
+```typescript
+// Save stamp state (e.g. to localStorage)
+const state = alice.Swarm.getStampState(); // Uint32Array
+
+// Restore on next session
+alice.StampBuckets = savedState;
+```
+
+## Client-side stamping (zero-BZZ respondent)
+
+When the initiator sets `SignerKey`, two things happen automatically:
+
+1. A **handshake stamp** is embedded in the token — the respondent uses it to write their handshake SOC
+2. A **book of stamps** (36 pre-signed, encrypted stamps) is sent after handshake — the respondent uses them to send messages
+
+The respondent needs zero BZZ or xDAI.
+
+```typescript
+// Initiator (has BZZ)
+const alice = new SwapChat(apiURL, onMessage, false, 5000);
+alice.SignerKey = "<hex-private-key>";
+alice.BatchID = "<stamp-id>";
+await alice.initiate();
+const token = alice.getToken(); // includes handshake stamp
+
+// Respondent (no BZZ needed)
+const bob = new SwapChat(apiURL, onMessage, false, 5000);
+await bob.respond(token);       // uses handshake stamp from token
+// after handshake, bob reads encrypted book of stamps
+// bob.send() uses pre-signed stamps — up to 36 messages
+```
+
+To buy a stamp on Gnosis Chain:
+
+```bash
+BEE_SIGNER_KEY=<hex-private-key> ./scripts/buy-stamp.sh
+```
+
+Calls the [PostageStamp contract](https://github.com/ethersphere/storage-incentives) via `cast` ([Foundry](https://getfoundry.sh)).
+
+## Protocol
 
 ### Cryptography
 
-- **Key exchange**: Hybrid ML-KEM-768 + secp256k1 ECDH (post-quantum + classical)
-- **Message encryption**: AES-256-CTR with message index as IV
-- **Hashing**: Keccak-256 (via js-sha3)
-- **KDF**: HKDF-SHA256 to combine ECDH and ML-KEM shared secrets
-- **SOC signing**: secp256k1 ECDSA (via bee-js / cafe-utility)
+| Component | Algorithm |
+|-----------|-----------|
+| Key exchange | Hybrid ML-KEM-768 + secp256k1 ECDH |
+| Message encryption | AES-256-CTR |
+| Hashing | Keccak-256 |
+| KDF | HKDF-SHA256 |
+| SOC signing | secp256k1 ECDSA |
+| Curve | secp256k1 (nothing-up-my-sleeve parameters) |
 
-ML-KEM is purely lattice-based (FIPS 203). The hybrid approach combines both at the protocol level — if either primitive is broken, the other still protects.
+ML-KEM is purely lattice-based (FIPS 203). The hybrid combines both at the protocol level — if either is broken, the other still protects.
 
-### Protocol
+### Handshake
 
 ```mermaid
 sequenceDiagram
@@ -24,130 +145,77 @@ sequenceDiagram
     participant Swarm
     participant Bob
 
-    Note over Alice: Generate SharedKeyPair E (secp256k1)<br/>Generate OwnKeyPair A (secp256k1)<br/>Generate ML-KEM keypair (encapKey, decapKey)
+    Note over Alice: Generate SharedKeyPair E (secp256k1)<br/>Generate OwnKeyPair A (secp256k1)<br/>Generate ML-KEM keypair<br/>Pre-stamp handshake SOC (if client stamping)
 
-    Alice->>Bob: Share token out-of-band<br/>(E.priv + A.pub + ML-KEM encapKey)
+    Alice->>Bob: Token (E.priv + A.pub + encapKey + handshakeStamp)
 
     Note over Bob: Generate OwnKeyPair B (secp256k1)<br/>ecdhSecret = ECDH(B.priv, A.pub)<br/>(ct, mlkemSecret) = ML-KEM.encapsulate(encapKey)<br/>secret = HKDF(ecdhSecret ‖ mlkemSecret)
 
-    Bob->>Swarm: Write SOC at E.address index 0<br/>(payload: B.pub + ML-KEM ciphertext)
+    Bob->>Swarm: SOC[E.addr, 0]: B.pub + ML-KEM ciphertext
 
-    loop Poll for handshake
-        Alice->>Swarm: Read SOC at E.address index 0
+    loop Poll
+        Alice->>Swarm: Read SOC[E.addr, 0]
     end
 
-    Swarm-->>Alice: B.pub + ciphertext
+    Note over Alice: ecdhSecret = ECDH(A.priv, B.pub)<br/>mlkemSecret = ML-KEM.decapsulate(decapKey, ct)<br/>secret = HKDF(ecdhSecret ‖ mlkemSecret)<br/>Create encrypted book of stamps for Bob
 
-    Note over Alice: ecdhSecret = ECDH(A.priv, B.pub)<br/>mlkemSecret = ML-KEM.decapsulate(decapKey, ct)<br/>secret = HKDF(ecdhSecret ‖ mlkemSecret)
+    Alice->>Swarm: SOC[E.addr, 2]: encrypted book of stamps
+    Alice->>Swarm: SOC[E.addr, 1]: ACK
 
-    Alice->>Swarm: Write SOC at E.address index 1<br/>(payload: ACK)
-
-    loop Poll for ACK
-        Bob->>Swarm: Read SOC at E.address index 1
+    loop Poll
+        Bob->>Swarm: Read SOC[E.addr, 1]
     end
 
-    Swarm-->>Bob: ACK
+    Note over Bob: Read + decrypt book of stamps
 
-    Note over Alice,Bob: Both have hybrid shared secret<br/>Messages encrypted with AES-256-CTR
-
-    Alice->>Swarm: Write SOC at A.address index 0<br/>(encrypted message)
-    Bob->>Swarm: Write SOC at B.address index 0<br/>(encrypted message)
-
-    loop Poll for messages
-        Alice->>Swarm: Read SOC at B.address index N
-        Bob->>Swarm: Read SOC at A.address index N
+    rect rgb(240,248,255)
+        Note over Alice,Bob: Encrypted messaging (AES-256-CTR)
+        Alice->>Swarm: SOC[A.addr, N]
+        Bob->>Swarm: SOC[B.addr, N]
     end
 ```
 
-### Setup
+### Token format (base64url, 1394 bytes)
+
+| Field | Bytes |
+|-------|-------|
+| Shared secp256k1 private key | 32 |
+| Initiator secp256k1 public key | 65 |
+| ML-KEM-768 encapsulation key | 1,184 |
+| Handshake stamp | 113 |
+| **Total** | **1,394** |
+
+### Book of stamps
+
+36 pre-signed postage stamps packed into one SOC (36 × 113 = 4,068 bytes), encrypted with AES-256-CTR using the shared secret.
+
+## Setup
 
 ```
 nvm use
 npm install
 ```
 
-### Book of Stamps (Zero-BZZ Respondent)
-
-The initiator can sponsor the respondent so they need zero BZZ or xDAI to chat. During the handshake, the initiator pre-signs postage stamps for all SOC addresses the respondent will use and sends them as an encrypted "book of stamps".
-
-```mermaid
-sequenceDiagram
-    participant Alice
-    participant Swarm
-    participant Bob
-
-    Note over Alice: Buy stamp batch on Gnosis Chain<br/>Generate keys + ML-KEM keypair<br/>Pre-stamp handshake SOC address
-
-    Alice->>Bob: Token (keys + ML-KEM encapKey + handshake stamp)
-
-    Note over Bob: No BZZ needed!<br/>Use handshake stamp from token
-
-    Bob->>Swarm: Write handshake SOC<br/>(using pre-signed stamp)
-
-    Swarm-->>Alice: Handshake payload
-
-    Note over Alice: Derive shared secret<br/>Pre-stamp 36 SOC addresses for Bob<br/>Encrypt book with shared secret
-
-    Alice->>Swarm: Write book of stamps SOC<br/>(36 encrypted pre-signed stamps)
-
-    Alice->>Swarm: Write ACK SOC
-
-    Swarm-->>Bob: ACK
-
-    Note over Bob: Read + decrypt book of stamps<br/>Now has 36 pre-paid message slots
-
-    Bob->>Swarm: Send message using stamp[0]
-    Bob->>Swarm: Send message using stamp[1]
-    Note over Bob: ...up to 36 messages
-```
-
-### Stamping
-
-Three modes:
-
-**Server-side stamping** (default): pass a batch ID and the bee node signs the stamp.
-
-**Client-side stamping**: set `SignerKey` and `BatchID` on the initiator. Stamps chunks locally in JavaScript.
-
-**Book of stamps** (zero-BZZ respondent): when the initiator uses client-side stamping, they automatically create a book of stamps for the respondent. The respondent needs nothing — stamps come from the token (handshake) and book (messages).
-
-To buy a stamp for client-side use, fund an address with BZZ + xDAI on Gnosis Chain, then:
-
-```
-BEE_SIGNER_KEY=<hex-private-key> ./scripts/buy-stamp.sh
-```
-
-This calls the [PostageStamp contract](https://github.com/ethersphere/storage-incentives) via `cast` (Foundry).
-
-### Running tests
-
-Requires a running Bee node.
+## Tests
 
 ```bash
 # Server-side stamping only
 BEE_API_URL=http://localhost:1633 \
-BEE_STAMP_ID=<node-owned-stamp> \
+BEE_STAMP_ID=<node-stamp> \
 npx jest --forceExit
 
-# With client-side stamping tests
+# With client-side stamping + book of stamps
 BEE_API_URL=http://localhost:1633 \
-BEE_STAMP_ID=<node-owned-stamp> \
-BEE_SIGNER_KEY=<hex-private-key> \
-BEE_CLIENT_STAMP_ID=<signer-owned-stamp> \
+BEE_STAMP_ID=<node-stamp> \
+BEE_SIGNER_KEY=<hex-key> \
+BEE_CLIENT_STAMP_ID=<signer-stamp> \
 BEE_STAMP_DEPTH=20 \
 npx jest --forceExit
 ```
 
-Environment variables:
-- `BEE_API_URL` — Bee node API URL (default: `http://localhost:1633`)
-- `BEE_STAMP_ID` — Node-owned stamp batch ID (server-side stamping)
-- `BEE_SIGNER_KEY` — Hex private key of the batch owner (client-side stamping)
-- `BEE_CLIENT_STAMP_ID` — Signer-owned stamp batch ID (client-side stamping)
-- `BEE_STAMP_DEPTH` — Batch depth (default: `20`)
-
-### Build
+## Build
 
 ```
 npm run build   # TypeScript → dist/tsc/
-npm run pack    # Webpack bundle → dist/web/swapchat_engine.js
+npm run pack    # Webpack → dist/web/swapchat_engine.js
 ```
