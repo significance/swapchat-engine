@@ -10,19 +10,30 @@ const STAMP_DEPTH = parseInt(process.env.BEE_STAMP_DEPTH || "20");
 const initiatorDidRecieve = console.log;
 const respondentDidRecieve = console.log;
 
-const TOKEN_LENGTH = 1708;
+const TOKEN_LENGTH = 1859;
 const RESTORE_TOKEN_LENGTH = 492;
 const POLL_TIME = 1000;
 
 jest.setTimeout(60000);
 
-function makeSession(callback: any): SwapChat {
+function makeInitiator(callback: any): SwapChat {
   const s = new SwapChat(apiURL, callback, false, POLL_TIME);
   if (SIGNER_KEY && CLIENT_STAMP_ID) {
     s.BatchID = CLIENT_STAMP_ID;
     s.SignerKey = SIGNER_KEY;
     s.StampDepth = STAMP_DEPTH;
   } else if (STAMP_ID) {
+    s.BatchID = STAMP_ID;
+  }
+  return s;
+}
+
+function makeRespondent(callback: any): SwapChat {
+  const s = new SwapChat(apiURL, callback, false, POLL_TIME);
+  // When client stamping is active, respondent gets handshake stamp from token
+  // and message stamps from book of stamps — zero BZZ needed
+  // Fall back to server-side stamp when no client stamping
+  if (!SIGNER_KEY && STAMP_ID) {
     s.BatchID = STAMP_ID;
   }
   return s;
@@ -59,14 +70,14 @@ let checkMessageIsReceived = (
 };
 
 test("session is initiated", async () => {
-  const swapChatA = makeSession(initiatorDidRecieve);
+  const swapChatA = makeInitiator(initiatorDidRecieve);
   const sessionA = await swapChatA.initiate();
 
   const token = sessionA.getToken();
 
   expect(token.length).toStrictEqual(TOKEN_LENGTH);
 
-  const swapChatB = makeSession(respondentDidRecieve);
+  const swapChatB = makeRespondent(respondentDidRecieve);
   const sessionB = await swapChatB.respond(token);
 
   expect(sessionA.SharedKeyPair).toStrictEqual(sessionB.SharedKeyPair);
@@ -87,11 +98,11 @@ test("session is initiated", async () => {
 });
 
 test("handshake chunk is sent and received", async () => {
-  const swapChatA = makeSession(initiatorDidRecieve);
+  const swapChatA = makeInitiator(initiatorDidRecieve);
   const sessionA = await swapChatA.initiate();
   const token = sessionA.getToken();
 
-  const swapChatB = makeSession(respondentDidRecieve);
+  const swapChatB = makeRespondent(respondentDidRecieve);
   const sessionB = await swapChatB.respond(token);
 
   await sessionA.waitForRespondentHandshakeChunk();
@@ -133,11 +144,11 @@ test("messages are sent and received", async () => {
     callbackCountB = callbackCountB + 1;
   };
 
-  const swapChatA = makeSession(callBackIncrementerA);
+  const swapChatA = makeInitiator(callBackIncrementerA);
   const sessionA = await swapChatA.initiate();
   const token = sessionA.getToken();
 
-  const swapChatB = makeSession(callBackIncrementerB);
+  const swapChatB = makeRespondent(callBackIncrementerB);
   const sessionB = await swapChatB.respond(token);
 
   await sessionA.waitForRespondentHandshakeChunk();
@@ -203,7 +214,7 @@ test("conversations are persisted and restored and new messages are sent and rec
     callbackCountB = callbackCountB + 1;
   };
 
-  const swapChatA = makeSession(callBackIncrementerA);
+  const swapChatA = makeInitiator(callBackIncrementerA);
   const sessionA = await swapChatA.restoreFromToken(restoreTokenA);
 
   await expect(
@@ -214,7 +225,7 @@ test("conversations are persisted and restored and new messages are sent and rec
     checkMessageIsReceived(sessionA, message_B_1, index_B_1)
   ).resolves.toBe(true);
 
-  const swapChatB = makeSession(callBackIncrementerB);
+  const swapChatB = makeRespondent(callBackIncrementerB);
   const sessionB = await swapChatB.restoreFromToken(restoreTokenB);
 
   await expect(

@@ -66,13 +66,50 @@ nvm use
 npm install
 ```
 
+### Book of Stamps (Zero-BZZ Respondent)
+
+The initiator can sponsor the respondent so they need zero BZZ or xDAI to chat. During the handshake, the initiator pre-signs postage stamps for all SOC addresses the respondent will use and sends them as an encrypted "book of stamps".
+
+```mermaid
+sequenceDiagram
+    participant Alice
+    participant Swarm
+    participant Bob
+
+    Note over Alice: Buy stamp batch on Gnosis Chain<br/>Generate keys + ML-KEM keypair<br/>Pre-stamp handshake SOC address
+
+    Alice->>Bob: Token (keys + ML-KEM encapKey + handshake stamp)
+
+    Note over Bob: No BZZ needed!<br/>Use handshake stamp from token
+
+    Bob->>Swarm: Write handshake SOC<br/>(using pre-signed stamp)
+
+    Swarm-->>Alice: Handshake payload
+
+    Note over Alice: Derive shared secret<br/>Pre-stamp 36 SOC addresses for Bob<br/>Encrypt book with shared secret
+
+    Alice->>Swarm: Write book of stamps SOC<br/>(36 encrypted pre-signed stamps)
+
+    Alice->>Swarm: Write ACK SOC
+
+    Swarm-->>Bob: ACK
+
+    Note over Bob: Read + decrypt book of stamps<br/>Now has 36 pre-paid message slots
+
+    Bob->>Swarm: Send message using stamp[0]
+    Bob->>Swarm: Send message using stamp[1]
+    Note over Bob: ...up to 36 messages
+```
+
 ### Stamping
 
-Two modes are supported:
+Three modes:
 
-**Server-side stamping** (default): pass a batch ID and the bee node signs the stamp. The batch must be owned by the node's wallet.
+**Server-side stamping** (default): pass a batch ID and the bee node signs the stamp.
 
-**Client-side stamping**: pass a signer key (the batch owner's private key) and stamp chunks locally in JavaScript. The bee node doesn't need to know the key. Set `SignerKey` and `BatchID` on the session before calling `initiate()` / `respond()`.
+**Client-side stamping**: set `SignerKey` and `BatchID` on the initiator. Stamps chunks locally in JavaScript.
+
+**Book of stamps** (zero-BZZ respondent): when the initiator uses client-side stamping, they automatically create a book of stamps for the respondent. The respondent needs nothing — stamps come from the token (handshake) and book (messages).
 
 To buy a stamp for client-side use, fund an address with BZZ + xDAI on Gnosis Chain, then:
 

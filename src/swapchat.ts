@@ -35,8 +35,14 @@ const STAMP_HEX_LENGTH = 64;
 const MLKEM_ENCAP_KEY_BYTES = 1184;
 const MLKEM_CIPHERTEXT_BYTES = 1088;
 
-// Token: sharedPrivKey(32) + initiatorPubKey(65) + mlkemEncapKey(1184) = 1281 bytes
-const TOKEN_BYTES = PRIVATE_KEY_BYTES + PUBLIC_KEY_BYTES + MLKEM_ENCAP_KEY_BYTES;
+// Book of stamps
+const BOOK_OF_STAMPS_INDEX = 2; // handshake uses 0 and 1
+const STAMP_ENVELOPE_SIZE = 113; // batchId(32) + index(8) + timestamp(8) + sig(65)
+const STAMPS_PER_BOOK = Math.floor(4096 / STAMP_ENVELOPE_SIZE); // 36
+
+// Token: sharedPrivKey(32) + initiatorPubKey(65) + mlkemEncapKey(1184) + handshakeStamp(113) = 1394 bytes
+const TOKEN_BYTES =
+	PRIVATE_KEY_BYTES + PUBLIC_KEY_BYTES + MLKEM_ENCAP_KEY_BYTES + STAMP_ENVELOPE_SIZE;
 
 // Restoration token is hex-encoded:
 // addr(40) + pub(130) + priv(64) + otherPub(130) + secret(64) + stamp(64) = 492
@@ -72,6 +78,8 @@ class SwapChat {
 	public MlKemCiphertext: undefined | MlKemCiphertext;
 	public SignerKey: undefined | string;
 	public StampDepth: number = 20;
+	public BookOfStamps: Map<number, any> = new Map();
+	public HandshakeStamp: undefined | Uint8Array; // marshalled 113-byte stamp
 
 	constructor(
 		apiURL: string,
@@ -144,9 +152,8 @@ class SwapChat {
 			throw new Error("Could not find key pairs");
 		}
 
-		if (this.BatchID === undefined) {
-			throw new Error("Could not find stamp");
-		}
+		const stampHex = this.BatchID ||
+			"0000000000000000000000000000000000000000000000000000000000000000";
 
 		if (this.SharedSecret === undefined) {
 			throw new Error("Could not find shared secret");
@@ -159,7 +166,6 @@ class SwapChat {
 			this.OtherPartyPublicKey
 		).toString("hex");
 		const sharedSecretHex = Buffer.from(this.SharedSecret).toString("hex");
-		const stampHex = this.BatchID;
 
 		return (
 			ownAddressHex +
@@ -228,6 +234,13 @@ class SwapChat {
 
 		if (this.SignerKey && this.BatchID) {
 			this.setupStamp();
+			// Pre-stamp the handshake SOC for the respondent
+			const handshakeAddr = this.Swarm.calculateSOCAddress(
+				this.SharedKeyPair.address,
+				0
+			);
+			const envelope = this.Swarm.stampForAddress(handshakeAddr);
+			this.HandshakeStamp = this.Swarm.marshalStampEnvelope(envelope);
 		} else if (this.BatchID !== undefined) {
 			await this.Swarm.useStamp(this.BatchID);
 		} else if (this.GatewayMode === false) {
@@ -258,6 +271,12 @@ class SwapChat {
 		offset += PUBLIC_KEY_BYTES;
 
 		Buffer.from(this.MlKemKeyPair.encapsulationKey).copy(tokenBuffer, offset);
+		offset += MLKEM_ENCAP_KEY_BYTES;
+
+		// Append handshake stamp (113 bytes) — or zeros if no client stamping
+		if (this.HandshakeStamp) {
+			Buffer.from(this.HandshakeStamp).copy(tokenBuffer, offset);
+		}
 
 		return toBase64Url(tokenBuffer);
 	}
@@ -267,7 +286,9 @@ class SwapChat {
 		this.OwnKeyPair = crypto.generateKeyPair();
 		this.parseToken(token);
 
-		if (this.SignerKey && this.BatchID) {
+		if (this.HandshakeStamp) {
+			// Respondent has a pre-signed stamp from initiator — zero BZZ mode
+		} else if (this.SignerKey && this.BatchID) {
 			this.setupStamp();
 		} else if (this.BatchID !== undefined) {
 			await this.Swarm.useStamp(this.BatchID);
@@ -307,6 +328,16 @@ class SwapChat {
 		const mlkemEncapKey = new Uint8Array(
 			tokenBuffer.subarray(offset, offset + MLKEM_ENCAP_KEY_BYTES)
 		);
+		offset += MLKEM_ENCAP_KEY_BYTES;
+
+		// Extract handshake stamp (113 bytes) — check if non-zero
+		const stampBytes = new Uint8Array(
+			tokenBuffer.subarray(offset, offset + STAMP_ENVELOPE_SIZE)
+		);
+		const hasStamp = stampBytes.some((b) => b !== 0);
+		if (hasStamp) {
+			this.HandshakeStamp = stampBytes;
+		}
 
 		this.OtherPartyPublicKey = respondentPublicKey;
 
@@ -355,7 +386,21 @@ class SwapChat {
 
 	async sendRespondentHandshakeChunk() {
 		const payload = this.getRespondentHandshakePayload();
-		await this.Swarm.writeSOC(this.SharedKeyPair, 0, payload);
+		if (this.HandshakeStamp) {
+			const issuer = new Uint8Array(20); // issuer recovered by node from sig
+			const envelope = this.Swarm.unmarshalStampEnvelope(
+				this.HandshakeStamp,
+				issuer
+			);
+			await this.Swarm.writeSOCWithEnvelope(
+				this.SharedKeyPair,
+				0,
+				payload,
+				envelope
+			);
+		} else {
+			await this.Swarm.writeSOC(this.SharedKeyPair, 0, payload);
+		}
 	}
 
 	async waitForRespondentHandshakeChunk(): Promise<void> {
@@ -380,6 +425,8 @@ class SwapChat {
 		await this.sendInitiatorHandshakeChunk();
 
 		this.parseRespondentHandshakePayload(response.payload.toUint8Array());
+
+		await this.createBookOfStamps();
 
 		this.IsPollingForMessages = true;
 		this.setReceiveLoop();
@@ -414,6 +461,8 @@ class SwapChat {
 			await sleep(this.PollMilliseconds);
 			return await this.waitForInitiatorHandshakeChunk();
 		}
+
+		await this.readBookOfStamps();
 
 		this.IsPollingForMessages = true;
 		this.setReceiveLoop();
@@ -461,6 +510,91 @@ class SwapChat {
 
 		this.OtherPartyPublicKey = respondentPublicKey;
 		this.OtherPartyAddress = crypto.publicKeyToAddress(respondentPublicKey);
+	}
+
+	async createBookOfStamps() {
+		if (!this.Swarm.ClientStamper) {
+			return;
+		}
+		if (this.OtherPartyAddress === undefined) {
+			throw new Error(
+				"cannot create book of stamps without other party address"
+			);
+		}
+		if (this.SharedSecret === undefined) {
+			throw new Error("cannot create book of stamps without shared secret");
+		}
+
+		const plaintext = Buffer.alloc(STAMPS_PER_BOOK * STAMP_ENVELOPE_SIZE);
+
+		for (let i = 0; i < STAMPS_PER_BOOK; i++) {
+			const socAddress = this.Swarm.calculateSOCAddress(
+				this.OtherPartyAddress,
+				i
+			);
+			const envelope = this.Swarm.stampForAddress(socAddress);
+			const marshalled = this.Swarm.marshalStampEnvelope(envelope);
+			plaintext.set(marshalled, i * STAMP_ENVELOPE_SIZE);
+		}
+
+		// Encrypt the book — stamps are valuable
+		const ivBuffer = crypto.ivFromUint(BOOK_OF_STAMPS_INDEX);
+		const encrypted = await crypto.encryptBuffer(
+			plaintext,
+			this.SharedSecret,
+			ivBuffer
+		);
+
+		await this.Swarm.writeSOC(
+			this.SharedKeyPair,
+			BOOK_OF_STAMPS_INDEX,
+			new Uint8Array(encrypted)
+		);
+	}
+
+	async readBookOfStamps() {
+		if (this.SharedKeyPair === undefined) {
+			throw new Error(
+				"cannot read book of stamps without shared key pair"
+			);
+		}
+		if (this.SharedSecret === undefined) {
+			return;
+		}
+
+		let response;
+		try {
+			response = await this.Swarm.readSOC(
+				this.SharedKeyPair.address,
+				BOOK_OF_STAMPS_INDEX
+			);
+		} catch (e) {
+			return;
+		}
+
+		// Decrypt the book
+		const ivBuffer = crypto.ivFromUint(BOOK_OF_STAMPS_INDEX);
+		const decrypted = crypto.decryptBuffer(
+			Buffer.from(response.payload.toUint8Array()),
+			this.SharedSecret,
+			ivBuffer
+		);
+
+		const issuer = new Uint8Array(20); // issuer recovered by node from sig
+		const count = Math.floor(decrypted.length / STAMP_ENVELOPE_SIZE);
+
+		for (let i = 0; i < count; i++) {
+			const offset = i * STAMP_ENVELOPE_SIZE;
+			const stampBytes = decrypted.slice(
+				offset,
+				offset + STAMP_ENVELOPE_SIZE
+			);
+			const envelope = this.Swarm.unmarshalStampEnvelope(
+				stampBytes,
+				issuer
+			);
+			this.BookOfStamps.set(i, envelope);
+		}
 	}
 
 	handShakeCompleted(): boolean {
@@ -518,11 +652,21 @@ class SwapChat {
 			this.OwnCurrentIndex
 		);
 
-		await this.Swarm.writeSOC(
-			this.OwnKeyPair,
-			this.OwnCurrentIndex,
-			new Uint8Array(payload)
-		);
+		const stampEnvelope = this.BookOfStamps.get(this.OwnCurrentIndex);
+		if (stampEnvelope) {
+			await this.Swarm.writeSOCWithEnvelope(
+				this.OwnKeyPair,
+				this.OwnCurrentIndex,
+				new Uint8Array(payload),
+				stampEnvelope
+			);
+		} else {
+			await this.Swarm.writeSOC(
+				this.OwnKeyPair,
+				this.OwnCurrentIndex,
+				new Uint8Array(payload)
+			);
+		}
 
 		this.OwnConversation.messages.push(message);
 		this.OwnCurrentIndex = this.OwnCurrentIndex + 1;

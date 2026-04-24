@@ -1,4 +1,11 @@
-import { Bee, Identifier, EthAddress, Stamper } from "@ethersphere/bee-js";
+import {
+	Bee,
+	Identifier,
+	EthAddress,
+	Stamper,
+	EnvelopeWithBatchId,
+	BatchId,
+} from "@ethersphere/bee-js";
 
 import { KeyPair } from "./types";
 
@@ -69,6 +76,68 @@ class Swarm {
 		}
 
 		return soc.address;
+	}
+
+	calculateSOCAddress(ownerAddress: any, index: number): Uint8Array {
+		const identifier = this.makeIdentifier(index);
+		const owner = new EthAddress(Buffer.from(ownerAddress));
+		return this.Bee.calculateSingleOwnerChunkAddress(
+			identifier,
+			owner
+		).toUint8Array();
+	}
+
+	stampForAddress(socAddress: Uint8Array): EnvelopeWithBatchId {
+		if (!this.ClientStamper) {
+			throw new Error("client stamper not configured");
+		}
+		const stampable = { hash: () => socAddress };
+		return this.ClientStamper.stamp(stampable as any);
+	}
+
+	async writeSOCWithEnvelope(
+		keyPair: KeyPair,
+		index: number,
+		data: any,
+		envelope: EnvelopeWithBatchId
+	) {
+		if (keyPair === undefined) {
+			throw new Error("can only write if keypair was defined");
+		}
+
+		const identifier = this.makeIdentifier(index);
+		const cac = this.Bee.makeContentAddressedChunk(new Uint8Array(data));
+		const soc = cac.toSingleOwnerChunk(identifier, keyPair.privateKey);
+
+		await this.Bee.uploadChunk(envelope, soc);
+
+		return soc.address;
+	}
+
+	marshalStampEnvelope(envelope: EnvelopeWithBatchId): Uint8Array {
+		const buf = new Uint8Array(113);
+		const batchIdBytes =
+			envelope.batchId instanceof Uint8Array
+				? envelope.batchId
+				: (envelope.batchId as any).toUint8Array();
+		buf.set(batchIdBytes, 0);
+		buf.set(envelope.index, 32);
+		buf.set(envelope.timestamp, 40);
+		buf.set(envelope.signature, 48);
+		return buf;
+	}
+
+	unmarshalStampEnvelope(
+		data: Uint8Array,
+		issuer: Uint8Array
+	): EnvelopeWithBatchId {
+		return {
+			batchId: new BatchId(data.slice(0, 32)),
+			index: data.slice(32, 40),
+			timestamp: data.slice(40, 48),
+			signature: data.slice(48, 113),
+			issuer: issuer,
+		} as EnvelopeWithBatchId;
 	}
 
 	async readSOC(address: any, index: number) {
