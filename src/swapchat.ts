@@ -657,8 +657,8 @@ class SwapChat {
 		const payloadString = JSON.stringify(message);
 		const msgBytes = Buffer.from(payloadString, "utf-8");
 
-		if (msgBytes.length > 4094) {
-			throw new Error("message too large for single chunk");
+		if (msgBytes.length > 2048) {
+			throw new Error("message too large (max 2KB)");
 		}
 
 		// 2-byte length prefix + message + zero padding to 4096

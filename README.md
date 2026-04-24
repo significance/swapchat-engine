@@ -69,6 +69,16 @@ new SwapChat(apiURL, didReceiveCallback, gatewayMode, pollMilliseconds)
 | `close()` | `void` | Stop polling |
 | `getRestorationToken()` | `string` | Get hex token for session persistence |
 | `restoreFromToken(token)` | `this` | Restore a session from a restoration token |
+| `Swarm.validateStampBatch()` | `Promise<boolean>` | Check if stamp batch is valid by uploading a test chunk |
+| `Swarm.getStampState()` | `Uint32Array` | Export stamp bucket state for persistence |
+
+### Limits
+
+| Limit | Value | Reason |
+|-------|-------|--------|
+| Message size | 2 KB | Fits in single padded chunk |
+| Chunk size | 4,096 bytes | All chunks padded to max to prevent side-channel analysis |
+| Book of stamps | 36 messages | Max stamps per SOC payload |
 
 ### Message format
 
