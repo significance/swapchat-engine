@@ -158,6 +158,27 @@ class Swarm {
 		} as EnvelopeWithBatchId;
 	}
 
+	async validateStampBatch(): Promise<boolean> {
+		if (!this.ClientStamper) {
+			return false;
+		}
+		const randomData = new Uint8Array(4096);
+		for (let i = 0; i < 4096; i++) {
+			randomData[i] = Math.floor(Math.random() * 256);
+		}
+		const cac = this.Bee.makeContentAddressedChunk(randomData);
+		const chunkWithHash = Object.assign({}, cac, {
+			hash: () => cac.address.toUint8Array(),
+		});
+		const envelope = this.ClientStamper.stamp(chunkWithHash as any);
+		try {
+			await this.Bee.uploadChunk(envelope, cac);
+			return true;
+		} catch (e) {
+			return false;
+		}
+	}
+
 	async readSOC(address: any, index: number) {
 		const identifier = this.makeIdentifier(index);
 		const ownerAddress = new EthAddress(Buffer.from(address));

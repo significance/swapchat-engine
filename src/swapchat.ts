@@ -655,15 +655,23 @@ class SwapChat {
 	): Promise<Buffer> {
 		const ivBuffer = crypto.ivFromUint(iv);
 		const payloadString = JSON.stringify(message);
-		const payloadBuffer = Buffer.from(payloadString, "utf-8");
+		const msgBytes = Buffer.from(payloadString, "utf-8");
+
+		if (msgBytes.length > 4094) {
+			throw new Error("message too large for single chunk");
+		}
+
+		// 2-byte length prefix + message + zero padding to 4096
+		const padded = Buffer.alloc(4096);
+		padded.writeUInt16BE(msgBytes.length, 0);
+		msgBytes.copy(padded, 2);
 
 		const encryptedBuffer = await crypto.encryptBuffer(
-			payloadBuffer,
+			padded,
 			secret,
 			ivBuffer
 		);
 
-		//todo check less than 4096kb
 		return encryptedBuffer;
 	}
 
@@ -720,7 +728,12 @@ class SwapChat {
 			secret,
 			ivBuffer
 		);
-		const payloadString = decryptedBuffer.toString("utf-8");
+
+		// Strip 2-byte length prefix and padding
+		const msgLen = decryptedBuffer.readUInt16BE(0);
+		const payloadString = decryptedBuffer
+			.subarray(2, 2 + msgLen)
+			.toString("utf-8");
 		const message = JSON.parse(payloadString);
 		return message;
 	}
