@@ -2,6 +2,15 @@
 
 Decentralized E2E encrypted chat on Ethereum Swarm. Messages stored as Single Owner Chunks (SOCs), constructed and signed client-side. Post-quantum hybrid key exchange. Zero-BZZ onboarding for respondents.
 
+| Feature | Status | |
+|---------|--------|-|
+| Post-quantum SOC handshake (ML-KEM-768 + ECDH) | ✅ | :crystal_ball: |
+| Browser-stamped chunks (client-side postage signing) | ✅ | :postbox: |
+| Book of stamps onboarding (zero BZZ for respondent) | ✅ | :ticket: |
+| Browser security context (no server, no keys leave device) | ✅ | :lock: |
+| Up to 36 fixed-size 4KB messages per conversation | ✅ | :envelope: |
+| Completely decentralised (Swarm network only) | ✅ | :globe_with_meridians: |
+
 ## API
 
 ### Quick start
