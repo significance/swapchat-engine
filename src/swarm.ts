@@ -17,10 +17,12 @@ class Swarm {
 	public KeyPair: KeyPair | undefined;
 	public BatchID: any;
 	public ClientStamper: Stamper | undefined;
+	public ReadTimeoutMs: number | undefined;
 
-	constructor(apiURL: string, socGatewayURL?: string) {
+	constructor(apiURL: string, socGatewayURL?: string, readTimeoutMs?: number) {
 		this.Bee = new Bee(apiURL);
 		this.SocBee = socGatewayURL ? new Bee(socGatewayURL) : this.Bee;
+		this.ReadTimeoutMs = readTimeoutMs;
 	}
 
 	useClientStamp(
@@ -196,7 +198,9 @@ class Swarm {
 			ownerAddress
 		);
 
-		const data = await this.Bee.downloadChunk(socAddress);
+		const data = await this.Bee.downloadChunk(socAddress,
+			this.ReadTimeoutMs ? { timeoutMs: this.ReadTimeoutMs } : undefined
+		);
 
 		const soc = this.Bee.unmarshalSingleOwnerChunk(data, socAddress);
 

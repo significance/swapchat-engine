@@ -87,9 +87,10 @@ class SwapChat {
 		didReceiveCallback: object,
 		gatewayMode: boolean,
 		pollMilliseconds: number,
-		socGatewayURL?: string
+		socGatewayURL?: string,
+		readTimeoutMs?: number
 	) {
-		this.Swarm = new Swarm(apiURL, socGatewayURL);
+		this.Swarm = new Swarm(apiURL, socGatewayURL, readTimeoutMs);
 		this.DidReceiveCallback = didReceiveCallback;
 		this.SecretCode = undefined;
 		this.SharedSecret = undefined;
