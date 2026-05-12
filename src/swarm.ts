@@ -13,12 +13,14 @@ const SOC_READ_TIMEOUT = 1000;
 
 class Swarm {
 	public Bee;
+	public SocBee;
 	public KeyPair: KeyPair | undefined;
 	public BatchID: any;
 	public ClientStamper: Stamper | undefined;
 
-	constructor(apiURL: string) {
+	constructor(apiURL: string, socGatewayURL?: string) {
 		this.Bee = new Bee(apiURL);
+		this.SocBee = socGatewayURL ? new Bee(socGatewayURL) : this.Bee;
 	}
 
 	useClientStamp(
@@ -80,20 +82,24 @@ class Swarm {
 		}
 
 		const identifier = this.makeIdentifier(index);
-		const cac = this.Bee.makeContentAddressedChunk(new Uint8Array(data));
-		const soc = cac.toSingleOwnerChunk(identifier, keyPair.privateKey);
+		const writer = this.SocBee.makeSOCWriter(keyPair.privateKey);
 
 		if (this.ClientStamper) {
-			const chunkWithHash = Object.assign({}, soc, {
-				hash: () => soc.address.toUint8Array(),
-			});
+			const socAddress = this.SocBee.calculateSingleOwnerChunkAddress(
+				identifier,
+				writer.owner
+			);
+			const chunkWithHash = { hash: () => socAddress.toUint8Array() };
 			const envelope = this.ClientStamper.stamp(chunkWithHash as any);
-			await this.Bee.uploadChunk(envelope, soc);
+			await writer.upload(envelope as any, identifier, new Uint8Array(data));
 		} else {
-			await this.Bee.uploadChunk(this.BatchID, soc);
+			await writer.upload(this.BatchID, identifier, new Uint8Array(data));
 		}
 
-		return soc.address;
+		return this.SocBee.calculateSingleOwnerChunkAddress(
+			identifier,
+			writer.owner
+		);
 	}
 
 	calculateSOCAddress(ownerAddress: any, index: number): Uint8Array {
@@ -124,12 +130,14 @@ class Swarm {
 		}
 
 		const identifier = this.makeIdentifier(index);
-		const cac = this.Bee.makeContentAddressedChunk(new Uint8Array(data));
-		const soc = cac.toSingleOwnerChunk(identifier, keyPair.privateKey);
+		const writer = this.SocBee.makeSOCWriter(keyPair.privateKey);
 
-		await this.Bee.uploadChunk(envelope, soc);
+		await writer.upload(envelope as any, identifier, new Uint8Array(data));
 
-		return soc.address;
+		return this.SocBee.calculateSingleOwnerChunkAddress(
+			identifier,
+			writer.owner
+		);
 	}
 
 	marshalStampEnvelope(envelope: EnvelopeWithBatchId): Uint8Array {
