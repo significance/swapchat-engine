@@ -196,9 +196,7 @@ class Swarm {
 			ownerAddress
 		);
 
-		const data = await this.Bee.downloadChunk(socAddress, {
-			timeoutMs: SOC_READ_TIMEOUT,
-		});
+		const data = await this.Bee.downloadChunk(socAddress);
 
 		const soc = this.Bee.unmarshalSingleOwnerChunk(data, socAddress);
 
