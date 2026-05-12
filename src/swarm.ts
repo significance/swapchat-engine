@@ -9,7 +9,6 @@ import {
 
 import { KeyPair } from "./types";
 
-const SOC_READ_TIMEOUT = 1000;
 
 class Swarm {
 	public Bee;
