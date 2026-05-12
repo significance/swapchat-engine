@@ -46,15 +46,17 @@ function onMessage(msg) {
 ### Constructor
 
 ```typescript
-new SwapChat(apiURL, didReceiveCallback, gatewayMode, pollMilliseconds)
+new SwapChat(apiURL, didReceiveCallback, gatewayMode, pollMilliseconds, socGatewayURL?, readTimeoutMs?)
 ```
 
 | Param | Type | Description |
 |-------|------|-------------|
-| `apiURL` | `string` | Bee node API URL |
+| `apiURL` | `string` | Bee node or gateway URL |
 | `didReceiveCallback` | `(msg: Message) => void` | Called when a message is received |
 | `gatewayMode` | `boolean` | Use zero stamp (gateway nodes) |
 | `pollMilliseconds` | `number` | Polling interval for new messages |
+| `socGatewayURL` | `string?` | Optional separate URL for SOC uploads (defaults to `apiURL`) |
+| `readTimeoutMs` | `number?` | Chunk retrieval timeout in ms (omit for public gateways to avoid CORS issues) |
 
 ### Properties (set before `initiate`/`respond`)
 
