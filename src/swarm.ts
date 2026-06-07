@@ -53,16 +53,6 @@ class Swarm {
 		return this.BatchID;
 	}
 
-	async buyStamp() {
-		const postageBatchId = await this.Bee.createPostageBatch(
-			"1000000000",
-			20
-		);
-		this.BatchID = postageBatchId;
-
-		return this.BatchID;
-	}
-
 	zeroStamp() {
 		this.BatchID =
 			"0000000000000000000000000000000000000000000000000000000000000000";

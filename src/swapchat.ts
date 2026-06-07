@@ -276,10 +276,10 @@ class SwapChat {
 			this.HandshakeStamp = this.Swarm.marshalStampEnvelope(envelope);
 		} else if (this.BatchID !== undefined) {
 			await this.Swarm.useStamp(this.BatchID);
-		} else if (this.GatewayMode === false) {
-			this.BatchID = await this.Swarm.buyStamp();
-		} else {
+		} else if (this.GatewayMode === true) {
 			this.BatchID = this.Swarm.zeroStamp();
+		} else {
+			throw new Error("must provide a stamp (BatchID + SignerKey or BatchID)");
 		}
 
 		return this;
@@ -325,10 +325,10 @@ class SwapChat {
 			this.setupStamp();
 		} else if (this.BatchID !== undefined) {
 			await this.Swarm.useStamp(this.BatchID);
-		} else if (this.GatewayMode === false) {
-			this.BatchID = await this.Swarm.buyStamp();
-		} else {
+		} else if (this.GatewayMode === true) {
 			this.BatchID = this.Swarm.zeroStamp();
+		} else {
+			throw new Error("must provide a stamp (BatchID + SignerKey or BatchID)");
 		}
 
 		await this.sendRespondentHandshakeChunk();
