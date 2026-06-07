@@ -379,9 +379,10 @@ All key material (_sk<sub>A</sub>_, _sk<sub>B</sub>_, _dk_, _S_, stamp private k
 
 | Property | Guaranteed | Mechanism |
 |----------|-----------|-----------|
-| Confidentiality | Yes | AES-256-CTR, key from hybrid KDF |
+| Confidentiality | Yes | AES-256-CTR, per-message key from Double Ratchet |
 | Integrity | Yes | SOC ECDSA signatures |
-| Forward secrecy | Per-session | All keys are ephemeral; compromise of one session reveals nothing about others |
+| Forward secrecy | Per-message | Double Ratchet: symmetric KDF chain + DH ratchet |
+| Break-in recovery | Yes | DH ratchet step on direction change re-secures channel |
 | Post-quantum confidentiality | Yes | ML-KEM-768 (FIPS 203) in hybrid construction |
 | Authentication | Opt-in | Verification code comparison (out-of-band) |
 | Anonymity | Partial | Ephemeral addresses; traffic analysis possible |
@@ -417,15 +418,94 @@ NIST's Post-Quantum Cryptography standardisation process (2016-2024) evaluated 6
 
 The elimination of SIKE (Supersingular Isogeny Key Encapsulation) in 2022 — broken by a classical attack after advancing to the NIST finalist round — underscores the value of the hybrid approach. Swapchat 3's construction ensures that a similar unexpected break in ML-KEM would not compromise confidentiality, as ECDH would remain intact.
 
-### 7. Known limitations
+### 7. Double Ratchet
 
-1. **No forward secrecy within a session.** All messages in a session use the same _S_. Compromise of _S_ reveals the entire conversation. A ratchet protocol (e.g. Double Ratchet) would provide per-message forward secrecy but is incompatible with the SOC storage model.
+Swapchat 3 implements the Double Ratchet algorithm (Marlinspike & Perrin, 2016) over SOC storage. The ratchet is independent of the SOC addressing scheme — SOC keys handle chunk signing and addressing, while ratchet keys handle encryption key derivation.
 
-2. **Fixed message budget.** The book of stamps limits the respondent to 36 messages. This is a consequence of fitting pre-signed stamps into a single SOC (4,096 bytes / 113 bytes per stamp = 36).
+#### 7.1 Design
 
-3. **No key continuity.** Each session starts fresh. There is no mechanism to verify that the same human is behind consecutive sessions (no long-term identity).
+```mermaid
+sequenceDiagram
+    participant Alice
+    participant Bob
 
-4. **IV construction.** IVs are derived from message index as a 16-byte buffer with the index in the first two bytes. This is safe under AES-256-CTR because (a) each _S_ is unique per session and (b) indices are sequential and never reused within a session. The IV space supports up to 65,536 messages per direction per session, well above the 36-message budget.
+    Note over Alice,Bob: Handshake complete. S established.<br/>Bob sends ratchet DH pubkey in handshake payload.
+
+    Note over Alice: Init ratchet:<br/>RK₀, CK_s₀ = KDF_RK(S, ECDH(dh_A, dh_B₀))
+    Note over Bob: Init ratchet:<br/>RK = S, dh_B₀ = own DH keypair
+
+    rect rgb(255,250,240)
+        Note over Alice,Bob: Message 1: A → B
+        Note over Alice: CK_s₁, MK₀ = KDF_CK(CK_s₀)<br/>Encrypt with MK₀, delete MK₀
+        Alice->>Bob: SOC[A.addr, 0]: [dh_A.pub] + E_MK₀(msg)
+        Note over Bob: DH ratchet step (new dh_A.pub):<br/>RK₁, CK_r₀ = KDF_RK(RK, ECDH(dh_B₀, dh_A))<br/>Generate dh_B₁<br/>RK₂, CK_s₀ = KDF_RK(RK₁, ECDH(dh_B₁, dh_A))<br/>CK_r₁, MK₀ = KDF_CK(CK_r₀)<br/>Decrypt with MK₀, delete MK₀
+    end
+
+    rect rgb(240,248,255)
+        Note over Alice,Bob: Message 2: B → A
+        Note over Bob: CK_s₁, MK₀ = KDF_CK(CK_s₀)<br/>Encrypt with MK₀, delete MK₀
+        Bob->>Alice: SOC[B.addr, 0]: [dh_B₁.pub] + E_MK₀(msg)
+        Note over Alice: DH ratchet step (new dh_B₁.pub):<br/>Derive new RK, CK_r, CK_s<br/>Decrypt with MK₀, delete MK₀
+    end
+
+    Note over Alice,Bob: Each direction change triggers a DH ratchet step.<br/>Consecutive same-direction messages only advance the symmetric chain.
+```
+
+#### 7.2 Compatibility with SOC
+
+The ratchet operates on a separate plane from SOC addressing:
+
+| Concern | Key material | Lifetime |
+|---------|-------------|----------|
+| SOC addressing & signing | `OwnKeyPair` (secp256k1) | Entire session |
+| Encryption key derivation | Ratchet DH keys + chain keys | Rotates per message turn |
+
+The DH ratchet public key is transmitted as a **cleartext header** (65 bytes) prepended to the encrypted message body within each SOC. This follows Signal's design — the header reveals only an ephemeral public key with no link to message content.
+
+**SOC payload format with ratchet:**
+```
+[DH ratchet pubkey (65 bytes, cleartext)][AES-256-CTR encrypted body (4031 bytes)]
+```
+
+The encrypted body contains: `[2-byte length prefix][message JSON][zero padding to 4031 bytes]`
+
+#### 7.3 Forward secrecy properties
+
+| Property | Mechanism |
+|----------|-----------|
+| Per-message forward secrecy | Symmetric KDF chain: each `MK` is derived from `CK` then deleted |
+| Break-in recovery | DH ratchet: fresh ECDH per direction change re-secures the channel |
+| Session restoration | Ratchet state serialised in restoration token; old messages irrecoverable by design |
+
+**Key deletion schedule:**
+
+After encrypting message _n_: `MK_n` is deleted. `CK_n` is overwritten with `CK_{n+1}`.
+After a DH ratchet step: the old DH private key is overwritten. The old root key is overwritten.
+
+An attacker who compromises the device at time _t_ obtains the current ratchet state but cannot:
+- Derive `MK` for any message before _t_ (chain keys and message keys have been deleted)
+- Read messages already sent (the ciphertext on Swarm is opaque without the deleted keys)
+
+#### 7.4 Post-quantum considerations
+
+The DH ratchet uses secp256k1 ECDH, which is not post-quantum. However:
+
+- The **root key** is seeded from _S_, which is derived from the hybrid ML-KEM + ECDH handshake — this is PQ-protected
+- A **passive** quantum adversary performing HNDL cannot break _S_ (ML-KEM protects it), so they cannot derive the root key, and therefore cannot follow the ratchet chain
+- An **active** quantum adversary who can break the DH ratchet steps in real-time could follow the chain — but this requires a live CRQC during the session, not just post-hoc recording
+- A full PQ ratchet (e.g. using ML-KEM per ratchet step) would add ~2.5 KB per message direction change — feasible within the 4 KB SOC budget but not yet implemented
+
+### 8. Known limitations
+
+1. **Fixed message budget.** The book of stamps limits the respondent to 36 messages. This is a consequence of fitting pre-signed stamps into a single SOC (4,096 bytes / 113 bytes per stamp = 36).
+
+2. **No key continuity.** Each session starts fresh. There is no mechanism to verify that the same human is behind consecutive sessions (no long-term identity).
+
+3. **No post-quantum DH ratchet.** The DH ratchet steps use classical ECDH. A live quantum adversary could follow the ratchet chain in real-time. The initial session key is PQ-protected via ML-KEM, so passive HNDL attacks are mitigated.
+
+4. **Old messages irrecoverable after restore.** By design — forward secrecy means old message keys are deleted. A restored session can only send and receive new messages.
+
+5. **IV construction.** IVs are derived from message index as a 16-byte buffer with the index in the first two bytes. This is safe under AES-256-CTR because (a) each message key is unique (ratchet) and (b) indices are sequential and never reused within a session.
 
 ## Setup
 
@@ -436,20 +516,13 @@ npm install
 
 ## Tests
 
-```bash
-# Server-side stamping only
-BEE_API_URL=http://localhost:1633 \
-BEE_STAMP_ID=<node-stamp> \
-npx jest --forceExit
+Place a `book-of-stamps-*.txt` file in the project root. Tests auto-discover it, use its stamp for all uploads, and update usage after each run.
 
-# With client-side stamping + book of stamps
-BEE_API_URL=http://localhost:1633 \
-BEE_STAMP_ID=<node-stamp> \
-BEE_SIGNER_KEY=<hex-key> \
-BEE_CLIENT_STAMP_ID=<signer-stamp> \
-BEE_STAMP_DEPTH=20 \
+```bash
 npx jest --forceExit
 ```
+
+`BEE_API_URL` defaults to the value in `.env.test` (currently `https://api.gateway.ethswarm.org`).
 
 ## Build
 

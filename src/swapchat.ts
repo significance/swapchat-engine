@@ -1,9 +1,16 @@
 import Swarm from "./swarm";
 import crypto from "./crypto";
-
-function hexToBytes(hex: string): Buffer {
-	return Buffer.from(hex, "hex");
-}
+import {
+	initRatchetInitiator,
+	initRatchetRespondent,
+	ratchetEncrypt,
+	ratchetDecrypt,
+	generateDHKeyPair,
+	serializeRatchetState,
+	deserializeRatchetState,
+	DH_PUB_BYTES,
+	type RatchetState,
+} from "./ratchet";
 
 function toBase64Url(buf: Buffer): string {
 	return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -31,7 +38,6 @@ import {
 // Byte lengths for token fields
 const PRIVATE_KEY_BYTES = 32;
 const PUBLIC_KEY_BYTES = 65;
-const STAMP_HEX_LENGTH = 64;
 const MLKEM_ENCAP_KEY_BYTES = 1184;
 const MLKEM_CIPHERTEXT_BYTES = 1088;
 
@@ -43,13 +49,6 @@ const STAMPS_PER_BOOK = Math.floor(4096 / STAMP_ENVELOPE_SIZE); // 36
 // Token: sharedPrivKey(32) + initiatorPubKey(65) + mlkemEncapKey(1184) + handshakeStamp(113) = 1394 bytes
 const TOKEN_BYTES =
 	PRIVATE_KEY_BYTES + PUBLIC_KEY_BYTES + MLKEM_ENCAP_KEY_BYTES + STAMP_ENVELOPE_SIZE;
-
-// Restoration token is hex-encoded:
-// addr(40) + pub(130) + priv(64) + otherPub(130) + secret(64) + stamp(64) = 492
-const ADDRESS_HEX_LENGTH = 40;
-const PUBLIC_KEY_HEX_LENGTH = 130;
-const PRIVATE_KEY_HEX_LENGTH = 64;
-const SHARED_SECRET_HEX_LENGTH = 64;
 
 const sleep = (delay: number) =>
 	new Promise((resolve) => setTimeout(resolve, delay));
@@ -81,6 +80,8 @@ class SwapChat {
 	public StampBuckets: Uint32Array | undefined;
 	public BookOfStamps: Map<number, any> = new Map();
 	public HandshakeStamp: undefined | Uint8Array; // marshalled 113-byte stamp
+	public Ratchet: RatchetState | undefined;
+	public RatchetDHKeyPair: { privateKey: Buffer; publicKey: Buffer } | undefined;
 
 	constructor(
 		apiURL: string,
@@ -156,101 +157,130 @@ class SwapChat {
 		this.IsPollingForMessages = true;
 		this.setReceiveLoop();
 
-		this.IsPollingForRestoreMessages = true;
-		this.setRestoreConversationLoop();
+		// Only attempt to re-read old messages if no ratchet —
+		// with ratchet, old message keys are deleted (forward secrecy)
+		if (!this.Ratchet) {
+			this.IsPollingForRestoreMessages = true;
+			this.setRestoreConversationLoop();
+		}
 	}
 
-	getRestorationToken() {
-		if (
-			this.OwnKeyPair === undefined ||
-			this.OtherPartyPublicKey === undefined
-		) {
+	/**
+	 * Serialise session state to a base64url restoration token.
+	 *
+	 * Binary layout:
+	 *   version           (1)   0x02
+	 *   ownAddress        (20)
+	 *   ownPublicKey      (65)
+	 *   ownPrivateKey     (32)
+	 *   otherPartyPubKey  (65)
+	 *   sharedSecret      (32)
+	 *   sharedAddress     (20)
+	 *   batchId           (32)
+	 *   ownCurrentIndex   (2)   uint16 BE
+	 *   otherCurrentIndex (2)   uint16 BE
+	 *   ratchetLen        (2)   uint16 BE (0 if no ratchet)
+	 *   ratchetState      (var)
+	 */
+	getRestorationToken(): string {
+		if (!this.OwnKeyPair || !this.OtherPartyPublicKey) {
 			throw new Error("Could not find key pairs");
 		}
-
-		const stampHex = this.BatchID ||
-			"0000000000000000000000000000000000000000000000000000000000000000";
-
-		if (this.SharedSecret === undefined) {
+		if (!this.SharedSecret) {
 			throw new Error("Could not find shared secret");
 		}
 
-		const ownAddressHex = this.OwnKeyPair.address.toString("hex");
-		const ownPublicKeyHex = this.OwnKeyPair.publicKey.toString("hex");
-		const ownPrivateKeyHex = this.OwnKeyPair.privateKey.toString("hex");
-		const otherPartyPublicKeyHex = Buffer.from(
-			this.OtherPartyPublicKey
-		).toString("hex");
-		const sharedSecretHex = Buffer.from(this.SharedSecret).toString("hex");
+		const stamp = this.BatchID
+			? Buffer.from(this.BatchID, "hex")
+			: Buffer.alloc(32);
 
-		const sharedAddressHex = this.SharedKeyPair
-			? this.SharedKeyPair.address.toString("hex")
-			: "0000000000000000000000000000000000000000";
+		const sharedAddr = this.SharedKeyPair
+			? Buffer.from(this.SharedKeyPair.address)
+			: Buffer.alloc(20);
 
-		return (
-			ownAddressHex +
-			ownPublicKeyHex +
-			ownPrivateKeyHex +
-			otherPartyPublicKeyHex +
-			sharedSecretHex +
-			sharedAddressHex +
-			stampHex
-		);
+		const ratchetBuf = this.Ratchet
+			? serializeRatchetState(this.Ratchet)
+			: Buffer.alloc(0);
+
+		const indices = Buffer.alloc(4);
+		indices.writeUInt16BE(this.OwnCurrentIndex, 0);
+		indices.writeUInt16BE(this.OtherPartyCurrentIndex, 2);
+
+		const ratchetLen = Buffer.alloc(2);
+		ratchetLen.writeUInt16BE(ratchetBuf.length, 0);
+
+		const buf = Buffer.concat([
+			Buffer.from([0x02]),                          // version
+			Buffer.from(this.OwnKeyPair.address),         // 20
+			Buffer.from(this.OwnKeyPair.publicKey),        // 65
+			Buffer.from(this.OwnKeyPair.privateKey),       // 32
+			Buffer.from(this.OtherPartyPublicKey),         // 65
+			Buffer.from(this.SharedSecret),                // 32
+			sharedAddr,                                    // 20
+			stamp,                                         // 32
+			indices,                                       // 4
+			ratchetLen,                                    // 2
+			ratchetBuf,                                    // var
+		]);
+
+		return toBase64Url(buf);
 	}
 
 	parseRestorationToken(token: string) {
-		const tokenLength =
-			ADDRESS_HEX_LENGTH +
-			PUBLIC_KEY_HEX_LENGTH +
-			PRIVATE_KEY_HEX_LENGTH +
-			PUBLIC_KEY_HEX_LENGTH +
-			SHARED_SECRET_HEX_LENGTH +
-			ADDRESS_HEX_LENGTH +
-			STAMP_HEX_LENGTH;
+		const buf = fromBase64Url(token);
 
-		if (token.length !== tokenLength) {
-			throw new Error(
-				`token must be ${tokenLength} characters long, is ${token.length}`
-			);
+		const version = buf[0];
+		if (version !== 0x02) {
+			throw new Error(`unsupported restoration token version: ${version}`);
 		}
 
-		let offset = 0;
-		const ownAddressHex = token.substr(offset, ADDRESS_HEX_LENGTH);
-		offset += ADDRESS_HEX_LENGTH;
-		const ownPublicKeyHex = token.substr(offset, PUBLIC_KEY_HEX_LENGTH);
-		offset += PUBLIC_KEY_HEX_LENGTH;
-		const ownPrivateKeyHex = token.substr(offset, PRIVATE_KEY_HEX_LENGTH);
-		offset += PRIVATE_KEY_HEX_LENGTH;
-		const otherPartyPublicKeyHex = token.substr(offset, PUBLIC_KEY_HEX_LENGTH);
-		offset += PUBLIC_KEY_HEX_LENGTH;
-		const sharedSecretHex = token.substr(offset, SHARED_SECRET_HEX_LENGTH);
-		offset += SHARED_SECRET_HEX_LENGTH;
-		const sharedAddressHex = token.substr(offset, ADDRESS_HEX_LENGTH);
-		offset += ADDRESS_HEX_LENGTH;
-		const stampHex = token.substr(offset, STAMP_HEX_LENGTH);
+		let offset = 1;
+
+		const ownAddress = buf.subarray(offset, offset + 20);
+		offset += 20;
+		const ownPublicKey = buf.subarray(offset, offset + 65);
+		offset += 65;
+		const ownPrivateKey = buf.subarray(offset, offset + 32);
+		offset += 32;
+		const otherPartyPubKey = buf.subarray(offset, offset + 65);
+		offset += 65;
+		const sharedSecret = buf.subarray(offset, offset + 32);
+		offset += 32;
+		const sharedAddress = buf.subarray(offset, offset + 20);
+		offset += 20;
+		const stampBytes = buf.subarray(offset, offset + 32);
+		offset += 32;
+		const ownCurrentIndex = buf.readUInt16BE(offset);
+		offset += 2;
+		const otherCurrentIndex = buf.readUInt16BE(offset);
+		offset += 2;
+		const ratchetLen = buf.readUInt16BE(offset);
+		offset += 2;
 
 		this.OwnKeyPair = {
-			address: hexToBytes(ownAddressHex) as Address,
-			privateKey: hexToBytes(ownPrivateKeyHex) as PrivateKey,
-			publicKey: hexToBytes(ownPublicKeyHex) as PublicKey,
+			address: Buffer.from(ownAddress) as Address,
+			privateKey: Buffer.from(ownPrivateKey) as PrivateKey,
+			publicKey: Buffer.from(ownPublicKey) as PublicKey,
 		};
 
-		this.OtherPartyPublicKey = hexToBytes(
-			otherPartyPublicKeyHex
-		) as PublicKey;
+		this.OtherPartyPublicKey = Buffer.from(otherPartyPubKey) as PublicKey;
+		this.SharedSecret = Buffer.from(sharedSecret) as Secret;
 
-		this.SharedSecret = hexToBytes(sharedSecretHex) as Secret;
-
-		// Restore SharedKeyPair address for book of stamps re-read
-		const sharedAddr = hexToBytes(sharedAddressHex);
-		const hasSharedAddr = sharedAddr.some((b: number) => b !== 0);
+		const hasSharedAddr = sharedAddress.some((b: number) => b !== 0);
 		if (hasSharedAddr) {
 			this.SharedKeyPair = {
-				address: sharedAddr as Address,
+				address: Buffer.from(sharedAddress) as Address,
 			} as KeyPair;
 		}
 
-		this.BatchID = stampHex;
+		this.BatchID = Buffer.from(stampBytes).toString("hex");
+		this.OwnCurrentIndex = ownCurrentIndex;
+		this.OtherPartyCurrentIndex = otherCurrentIndex;
+
+		if (ratchetLen > 0) {
+			const ratchetBuf = buf.subarray(offset, offset + ratchetLen);
+			this.Ratchet = deserializeRatchetState(ratchetBuf);
+		}
 	}
 
 	restoreFromToken(token: string) {
@@ -408,12 +438,17 @@ class SwapChat {
 		if (this.MlKemCiphertext === undefined) {
 			throw new Error("Could not find ML-KEM ciphertext");
 		}
-		// Concatenate secp256k1 public key (65 bytes) + ML-KEM ciphertext (1088 bytes)
+
+		// Generate ratchet DH key pair for respondent
+		this.RatchetDHKeyPair = generateDHKeyPair();
+
+		// secp256k1 pub (65) + ML-KEM ciphertext (1088) + ratchet DH pub (65)
 		const payload = new Uint8Array(
-			PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES
+			PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES + DH_PUB_BYTES
 		);
 		payload.set(this.OwnKeyPair.publicKey, 0);
 		payload.set(this.MlKemCiphertext, PUBLIC_KEY_BYTES);
+		payload.set(this.RatchetDHKeyPair.publicKey, PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES);
 		return payload;
 	}
 
@@ -497,6 +532,11 @@ class SwapChat {
 
 		await this.readBookOfStamps();
 
+		// Initialise Double Ratchet — respondent side
+		if (this.SharedSecret && this.RatchetDHKeyPair) {
+			this.Ratchet = initRatchetRespondent(this.SharedSecret, this.RatchetDHKeyPair);
+		}
+
 		this.IsPollingForMessages = true;
 		this.setReceiveLoop();
 
@@ -512,11 +552,10 @@ class SwapChat {
 			throw new Error("could not find ML-KEM key pair");
 		}
 
-		if (payload.length !== PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES) {
+		const expectedLen = PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES + DH_PUB_BYTES;
+		if (payload.length !== expectedLen) {
 			throw new Error(
-				`handshake payload must be ${
-					PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES
-				} bytes, is ${payload.length}`
+				`handshake payload must be ${expectedLen} bytes, is ${payload.length}`
 			);
 		}
 
@@ -524,8 +563,11 @@ class SwapChat {
 			payload.slice(0, PUBLIC_KEY_BYTES)
 		) as PublicKey;
 		const mlkemCiphertext = payload.slice(
-			PUBLIC_KEY_BYTES
+			PUBLIC_KEY_BYTES, PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES
 		) as MlKemCiphertext;
+		const ratchetDHPub = Buffer.from(
+			payload.slice(PUBLIC_KEY_BYTES + MLKEM_CIPHERTEXT_BYTES)
+		);
 
 		// Hybrid key exchange: ECDH + ML-KEM
 		const ecdhSecret = crypto.calculateSharedSecret(
@@ -543,6 +585,9 @@ class SwapChat {
 
 		this.OtherPartyPublicKey = respondentPublicKey;
 		this.OtherPartyAddress = crypto.publicKeyToAddress(respondentPublicKey);
+
+		// Initialise Double Ratchet — initiator ratchets against respondent's DH key
+		this.Ratchet = initRatchetInitiator(this.SharedSecret, ratchetDHPub);
 	}
 
 	async createBookOfStamps() {
@@ -655,15 +700,42 @@ class SwapChat {
 		secret: Secret,
 		iv: number
 	): Promise<Buffer> {
-		const ivBuffer = crypto.ivFromUint(iv);
 		const payloadString = JSON.stringify(message);
 		const msgBytes = Buffer.from(payloadString, "utf-8");
+		const ivBuffer = crypto.ivFromUint(iv);
 
+		if (this.Ratchet) {
+			// Double Ratchet: per-message key with cleartext DH header
+			const { messageKey, header } = ratchetEncrypt(this.Ratchet);
+			const encBodyLen = 4096 - DH_PUB_BYTES;
+
+			if (msgBytes.length > (encBodyLen - 2)) {
+				throw new Error(`message too large (max ${encBodyLen - 2} bytes)`);
+			}
+
+			// Encrypted body: [2-byte len][message][zero padding]
+			const body = Buffer.alloc(encBodyLen);
+			body.writeUInt16BE(msgBytes.length, 0);
+			msgBytes.copy(body, 2);
+
+			const encryptedBody = await crypto.encryptBuffer(
+				body,
+				messageKey as Secret,
+				ivBuffer
+			);
+
+			// Final payload: [DH header (65, cleartext)][encrypted body]
+			const payload = Buffer.alloc(4096);
+			Buffer.from(header).copy(payload, 0);
+			encryptedBody.copy(payload, DH_PUB_BYTES);
+			return payload;
+		}
+
+		// Fallback: no ratchet (legacy / restore)
 		if (msgBytes.length > 2048) {
 			throw new Error("message too large (max 2KB)");
 		}
 
-		// 2-byte length prefix + message + zero padding to 4096
 		const padded = Buffer.alloc(4096);
 		padded.writeUInt16BE(msgBytes.length, 0);
 		msgBytes.copy(padded, 2);
@@ -724,6 +796,26 @@ class SwapChat {
 
 	decryptPayload(payloadBuffer: Buffer, secret: Secret, iv: number): Message {
 		const ivBuffer = crypto.ivFromUint(iv);
+
+		if (this.Ratchet) {
+			// Header is cleartext: first 65 bytes
+			const header = Buffer.from(payloadBuffer.subarray(0, DH_PUB_BYTES));
+			const encryptedBody = Buffer.from(payloadBuffer.subarray(DH_PUB_BYTES));
+
+			const { messageKey } = ratchetDecrypt(this.Ratchet, header);
+
+			const decryptedBody = crypto.decryptBuffer(
+				encryptedBody,
+				messageKey as Secret,
+				ivBuffer
+			);
+
+			const msgLen = decryptedBody.readUInt16BE(0);
+			const payloadString = decryptedBody
+				.subarray(2, 2 + msgLen)
+				.toString("utf-8");
+			return JSON.parse(payloadString);
+		}
 
 		const decryptedBuffer = crypto.decryptBuffer(
 			payloadBuffer,
